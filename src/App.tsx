@@ -339,6 +339,7 @@ export default function App() {
         pyramidFound={pyramidFound}
         foundWords={foundWords}
         validWords={validWords}
+        grid={grid!}
         onBack={() => {
           setIsDailyChallenge(false)
           initGame(randomSeed(), prevConfigRef.current)

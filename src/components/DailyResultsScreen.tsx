@@ -1,5 +1,8 @@
 import { useState, useRef } from 'react'
 import { scoreForWord } from '../lib/scoring'
+import { findWordPath } from '../lib/gridGenerator'
+import type { Cell, Grid as GridType } from '../lib/gridGenerator'
+import Grid from './Grid'
 
 const PYRAMID_LENGTHS = [3, 4, 5, 6, 7, 8] as const
 
@@ -18,6 +21,7 @@ interface Props {
   pyramidFound: Record<number, string>
   foundWords: string[]
   validWords: Set<string>
+  grid: GridType
   onBack: () => void
 }
 
@@ -47,8 +51,9 @@ function PyramidSlot({ len, word }: { len: number; word?: string }) {
   )
 }
 
-export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound, foundWords, validWords, onBack }: Props) {
+export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound, foundWords, validWords, grid, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('pyramide')
+  const [discoveryWord, setDiscoveryWord] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number>(0)
 
@@ -58,6 +63,8 @@ export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound,
   const missed = [...validWords]
     .filter(w => !foundWords.includes(w))
     .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b))
+
+  const discoveryPath: Cell[] | null = discoveryWord ? findWordPath(grid, discoveryWord) : null
 
   function copySummary() {
     const lines = [
@@ -109,7 +116,7 @@ export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound,
           ]).map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => { setTab(t.id); setDiscoveryWord(null) }}
               className={`flex-1 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                 tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
@@ -146,22 +153,41 @@ export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound,
         )}
 
         {tab === 'rates' && (
-          <div className="px-5 pb-4">
+          <div className="pb-4">
             {missed.length === 0 && (
               <p className="text-green-500 text-sm text-center py-12">🎉 Tu as tout trouvé !</p>
             )}
-            {missed.map((w, i) => {
-              const s = scoreForWord(w)
-              return (
-                <div
-                  key={w}
-                  className={`flex items-center justify-between py-3 ${i > 0 ? 'border-t border-slate-800/80' : ''}`}
-                >
-                  <span className="font-semibold text-slate-400 uppercase tracking-wide text-[15px]">{w}</span>
-                  <span className={`text-xs font-bold tabular-nums px-2 py-1 rounded-full ${SCORE_BG[s] ?? 'bg-slate-800'} ${SCORE_COLOR[s] ?? 'text-slate-500'}`}>+{s} pts</span>
-                </div>
-              )
-            })}
+
+            {discoveryWord && (
+              <div className="mb-4 mx-5 p-4 rounded-3xl bg-slate-800/80 border border-violet-500/20 flex flex-col items-center gap-2">
+                <p className="text-violet-300 font-bold tracking-widest uppercase text-sm">{discoveryWord}</p>
+                {discoveryPath
+                  ? <Grid grid={grid} onWordSubmit={() => null} disabled discoveryPath={discoveryPath} />
+                  : <p className="text-slate-500 text-sm">Chemin non trouvé</p>
+                }
+              </div>
+            )}
+
+            <div className="px-5">
+              {missed.map((w, i) => {
+                const s = scoreForWord(w)
+                const active = discoveryWord === w
+                return (
+                  <button
+                    key={w}
+                    onClick={() => setDiscoveryWord(prev => prev === w ? null : w)}
+                    className={`flex items-center justify-between py-3 w-full text-left ${i > 0 ? 'border-t border-slate-800/80' : ''}`}
+                  >
+                    <span className={`font-semibold uppercase tracking-wide text-[15px] transition-colors ${active ? 'text-violet-300' : 'text-slate-400'}`}>
+                      {w}
+                    </span>
+                    <span className={`text-xs font-bold tabular-nums px-2 py-1 rounded-full ${SCORE_BG[s] ?? 'bg-slate-800'} ${active ? 'text-violet-300' : SCORE_COLOR[s] ?? 'text-slate-500'}`}>
+                      +{s} pts
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>

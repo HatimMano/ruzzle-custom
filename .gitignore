@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .vercel/
+.DS_Store
+src/.DS_Store
+utils/
+.claude/

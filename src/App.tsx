@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Grid from './components/Grid'
 import Timer from './components/Timer'
 import ResultsScreen from './components/ResultsScreen'
+import DailyResultsScreen from './components/DailyResultsScreen'
 import { loadDictionary, isValidWord, getTrie } from './lib/dictionary'
 import { generateGrid } from './lib/gridGenerator'
 import type { Cell, Grid as GridType } from './lib/gridGenerator'
@@ -17,6 +18,7 @@ interface GameConfig {
 }
 
 const DEFAULT_CONFIG: GameConfig = { minLetters: 5, duration: 60 }
+const PYRAMID_LENGTHS = [3, 4, 5, 6, 7, 8] as const
 
 const STREAK_BONUSES: [number, number][] = [[7, 5], [5, 3], [3, 1]]
 function streakBonus(streak: number): number {
@@ -28,6 +30,17 @@ function streakBonus(streak: number): number {
 
 type GameState = 'loading' | 'ready' | 'playing' | 'finished'
 type FeedbackType = 'valid' | 'duplicate' | 'invalid' | null
+
+function getDailyDate(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function fmtStopwatch(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
 
 function getSeedFromURL(): string | null {
   return new URLSearchParams(window.location.search).get('seed')
@@ -93,15 +106,28 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
 
+  // Daily challenge state
+  const [isDailyChallenge, setIsDailyChallenge] = useState(false)
+  const [pyramidFound, setPyramidFound] = useState<Record<number, string>>({})
+  const [elapsed, setElapsed] = useState(0)
+
   const copiedTimer = useRef<number>(0)
   const streakTimer = useRef<number>(0)
   const scoreAnimTimer = useRef<number>(0)
+  const elapsedIntervalRef = useRef<number>(0)
+  const elapsedRef = useRef(0)
   const scoreRef = useRef(0)
   const foundWordsRef = useRef<string[]>([])
   const configRef = useRef<GameConfig>(config)
+  const prevConfigRef = useRef<GameConfig>(DEFAULT_CONFIG)
+  const isDailyChallengeRef = useRef(false)
+  const pyramidFoundRef = useRef<Record<number, string>>({})
+
   scoreRef.current = score
   foundWordsRef.current = foundWords
   configRef.current = config
+  isDailyChallengeRef.current = isDailyChallenge
+  pyramidFoundRef.current = pyramidFound
 
   useEffect(() => {
     loadDictionary().then(() => {
@@ -113,12 +139,22 @@ export default function App() {
     })
   }, [])
 
+  // Countdown + start stopwatch for daily
   useEffect(() => {
     if (countdown === null) return
     if (countdown === 0) {
       setCountdown(null)
       setGameState('playing')
-      if (configRef.current.duration > 0) setTimerRunning(true)
+      if (isDailyChallengeRef.current) {
+        elapsedRef.current = 0
+        setElapsed(0)
+        elapsedIntervalRef.current = window.setInterval(() => {
+          elapsedRef.current += 1
+          setElapsed(elapsedRef.current)
+        }, 1000)
+      } else if (configRef.current.duration > 0) {
+        setTimerRunning(true)
+      }
       playGo()
       return
     }
@@ -126,6 +162,17 @@ export default function App() {
     const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000)
     return () => clearTimeout(t)
   }, [countdown])
+
+  // Auto-complete daily challenge when all 6 levels found
+  useEffect(() => {
+    if (!isDailyChallenge || gameState !== 'playing') return
+    if (PYRAMID_LENGTHS.every(l => !!pyramidFound[l])) {
+      clearInterval(elapsedIntervalRef.current)
+      window.setTimeout(() => {
+        setGameState('finished')
+      }, 700)
+    }
+  }, [pyramidFound, isDailyChallenge, gameState])
 
   const initGame = (s: string, cfg: GameConfig = config) => {
     const trie = getTrie()
@@ -151,7 +198,19 @@ export default function App() {
 
   const startGame = () => setCountdown(3)
 
+  const startDailyChallenge = () => {
+    prevConfigRef.current = configRef.current
+    clearInterval(elapsedIntervalRef.current)
+    elapsedRef.current = 0
+    setElapsed(0)
+    setPyramidFound({})
+    setIsDailyChallenge(true)
+    initGame(getDailyDate(), { minLetters: 3, duration: 0 })
+    setCountdown(3)
+  }
+
   const finishGame = useCallback((finalScore: number, finalWords: string[]) => {
+    clearInterval(elapsedIntervalRef.current)
     setTimerRunning(false)
     setGameState('finished')
     const newBest = saveBestScore(seed, finalScore)
@@ -173,6 +232,7 @@ export default function App() {
   }, [finishGame])
 
   const stopGame = () => {
+    clearInterval(elapsedIntervalRef.current)
     setTimerRunning(false)
     setGameState('finished')
     const newBest = saveBestScore(seed, score)
@@ -184,14 +244,19 @@ export default function App() {
 
   const newGame = () => {
     if (gameState === 'playing' && !confirm('Abandonner la partie en cours ?')) return
-    initGame(randomSeed(), configRef.current)
+    clearInterval(elapsedIntervalRef.current)
+    setIsDailyChallenge(false)
+    initGame(randomSeed(), prevConfigRef.current)
   }
 
-  const replayGame = () => initGame(seed, config)
+  const replayGame = () => {
+    clearInterval(elapsedIntervalRef.current)
+    initGame(seed, config)
+  }
 
   const handleWordSubmit = useCallback((cells: Cell[]): FeedbackType => {
     const word = cells.map(c => c.letter).join('').toLowerCase()
-    const { minLetters } = configRef.current
+    const minLetters = isDailyChallengeRef.current ? 3 : configRef.current.minLetters
 
     if (foundWords.includes(word)) {
       playDuplicate()
@@ -218,6 +283,14 @@ export default function App() {
     clearTimeout(scoreAnimTimer.current)
     setScoreAnim({ pts: total, id: Date.now() })
     scoreAnimTimer.current = window.setTimeout(() => setScoreAnim(null), 700)
+
+    // Daily challenge: track pyramid levels
+    if (isDailyChallengeRef.current) {
+      const key = Math.min(word.length, 8)
+      if (!pyramidFoundRef.current[key]) {
+        setPyramidFound(prev => ({ ...prev, [key]: word }))
+      }
+    }
 
     if (bonus > 0) {
       playStreak()
@@ -257,7 +330,22 @@ export default function App() {
     )
   }
 
-  // === FINISHED ===
+  // === FINISHED (daily) ===
+  if (gameState === 'finished' && isDailyChallenge) {
+    return (
+      <DailyResultsScreen
+        date={getDailyDate()}
+        elapsedSeconds={elapsedRef.current}
+        pyramidFound={pyramidFound}
+        onBack={() => {
+          setIsDailyChallenge(false)
+          initGame(randomSeed(), prevConfigRef.current)
+        }}
+      />
+    )
+  }
+
+  // === FINISHED (normal) ===
   if (gameState === 'finished' && grid) {
     return (
       <ResultsScreen
@@ -277,7 +365,6 @@ export default function App() {
     )
   }
 
-  // Boutons header communs
   const headerButtons = [
     { icon: '📋', label: 'Historique', onClick: () => setShowHistory(h => !h) },
     { icon: copied ? '✓' : '🔗', label: copied ? 'Copié !' : 'Partager', onClick: copyLink },
@@ -351,15 +438,26 @@ export default function App() {
             </span>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+          <div className="flex-1 flex flex-col items-center justify-center px-6 gap-5 overflow-y-auto">
 
-            {/* Score record */}
-            {bestScore !== null && (
-              <p className="text-yellow-600/80 text-xs font-medium">🏆 Record sur ce seed : {bestScore} pts</p>
-            )}
+            {/* Daily challenge button */}
+            <button
+              onClick={startDailyChallenge}
+              className="w-full py-4 px-5 rounded-3xl bg-yellow-500/10 border border-yellow-500/25 flex items-center gap-4 active:bg-yellow-500/20 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-full bg-yellow-500/20 flex items-center justify-center text-2xl flex-none">⚡</div>
+              <div className="text-left flex-1">
+                <p className="text-yellow-300 font-bold text-base">Défi du jour</p>
+                <p className="text-yellow-600/80 text-xs mt-0.5">Complète la pyramide · 3L→4L→5L→6L→7L→8L+</p>
+              </div>
+              <span className="text-slate-600 text-xl">›</span>
+            </button>
 
             {/* Config card */}
             <div className="w-full bg-slate-800/60 rounded-3xl p-5 flex flex-col gap-5">
+              {bestScore !== null && (
+                <p className="text-yellow-600/70 text-xs font-medium text-center">🏆 Record : {bestScore} pts</p>
+              )}
 
               {/* Durée */}
               <div className="flex flex-col gap-2.5">
@@ -403,7 +501,7 @@ export default function App() {
 
               {/* Score preview */}
               <div className="flex justify-around pt-1">
-                {([3,4,5,6,7,8] as const)
+                {([3, 4, 5, 6, 7, 8] as const)
                   .filter(l => l >= config.minLetters)
                   .slice(0, 5)
                   .map(l => {
@@ -412,7 +510,7 @@ export default function App() {
                     return (
                       <div key={l} className="flex flex-col items-center gap-0.5">
                         <span className={`text-xs font-black ${color}`}>+{pts}</span>
-                        <span className="text-[10px] text-slate-600">{l}L</span>
+                        <span className="text-[10px] text-slate-600">{l === 8 ? '8+' : `${l}L`}</span>
                       </div>
                     )
                   })}
@@ -447,8 +545,10 @@ export default function App() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-4 pb-5 border-b border-slate-800">
         <div className="flex items-baseline gap-2">
-          <h1 className="text-xl font-black text-white tracking-tight">RUZZLE</h1>
-          <span className="text-[10px] text-slate-600 font-mono tracking-widest">{seed}</span>
+          <h1 className="text-xl font-black text-white tracking-tight">
+            {isDailyChallenge ? <span className="text-yellow-400">⚡ DÉFI</span> : 'RUZZLE'}
+          </h1>
+          {!isDailyChallenge && <span className="text-[10px] text-slate-600 font-mono tracking-widest">{seed}</span>}
         </div>
         <div className="flex gap-4">
           {headerButtons.map(btn => (
@@ -476,7 +576,11 @@ export default function App() {
           <span className="text-2xl font-bold text-slate-300 tabular-nums">{foundWords.length}</span>
           <span className="text-slate-600 text-sm">/{validWords.size}</span>
         </div>
-        {config.duration > 0 ? (
+        {isDailyChallenge ? (
+          <div className="w-20 h-20 flex items-center justify-center">
+            <span className="text-xl font-bold text-yellow-400 tabular-nums">{fmtStopwatch(elapsed)}</span>
+          </div>
+        ) : config.duration > 0 ? (
           <Timer key={timerKey} duration={config.duration} running={timerRunning} onEnd={endGame} />
         ) : (
           <div className="w-20 h-20 flex items-center justify-center">
@@ -493,7 +597,7 @@ export default function App() {
               grid={grid}
               onWordSubmit={handleWordSubmit}
               disabled={false}
-              minLetters={config.minLetters}
+              minLetters={isDailyChallenge ? 3 : config.minLetters}
             />
           )}
           {scoreAnim && (
@@ -519,8 +623,27 @@ export default function App() {
           </div>
         )}
 
-        {foundWords.length > 0 && (
-          <div className="w-full overflow-x-auto flex gap-2 pb-0.5" style={{scrollbarWidth:'none'}}>
+        {/* Pyramid strip (daily) or found words strip (normal) */}
+        {isDailyChallenge ? (
+          <div className="flex gap-1.5 w-full">
+            {(PYRAMID_LENGTHS as unknown as number[]).map(len => {
+              const word = pyramidFound[len]
+              const label = len === 8 ? '8+' : `${len}L`
+              return (
+                <div key={len} className={`flex-1 flex flex-col items-center py-2 rounded-xl border transition-all duration-300 ${
+                  word ? 'bg-green-500/20 border-green-500/40' : 'bg-slate-800/60 border-slate-700'
+                }`}>
+                  <span className={`text-[10px] font-bold ${word ? 'text-green-400' : 'text-slate-600'}`}>{label}</span>
+                  {word
+                    ? <span className="text-[8px] text-green-300 uppercase font-mono mt-0.5 w-full text-center px-0.5 truncate">{word}</span>
+                    : <span className="text-slate-700 text-xs mt-0.5">·</span>
+                  }
+                </div>
+              )
+            })}
+          </div>
+        ) : foundWords.length > 0 ? (
+          <div className="w-full overflow-x-auto flex gap-2 pb-0.5" style={{ scrollbarWidth: 'none' }}>
             {[...foundWords].reverse().slice(0, 12).map((w, i) => {
               const s = scoreForWord(w)
               const color = s >= 12 ? 'bg-orange-500/20 text-orange-300 border-orange-500/30'
@@ -534,7 +657,7 @@ export default function App() {
               )
             })}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Bouton terminer */}
@@ -543,7 +666,7 @@ export default function App() {
           onClick={stopGame}
           className="w-full py-4 rounded-full bg-slate-800 active:bg-slate-700 text-slate-500 active:text-slate-300 text-sm font-semibold transition-colors"
         >
-          Terminer la partie
+          {isDailyChallenge ? 'Abandonner la pyramide' : 'Terminer la partie'}
         </button>
       </div>
 

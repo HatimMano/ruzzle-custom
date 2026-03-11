@@ -337,6 +337,8 @@ export default function App() {
         date={getDailyDate()}
         elapsedSeconds={elapsedRef.current}
         pyramidFound={pyramidFound}
+        foundWords={foundWords}
+        validWords={validWords}
         onBack={() => {
           setIsDailyChallenge(false)
           initGame(randomSeed(), prevConfigRef.current)

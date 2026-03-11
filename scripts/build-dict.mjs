@@ -21,7 +21,7 @@ const OUT = path.join(__dirname, '..', 'public', 'words_fr.txt')
 const URL = 'http://www.lexique.org/databases/Lexique383/Lexique383.tsv'
 
 const VALID_POS = new Set(['NOM', 'ADJ', 'VER', 'ADV'])
-const VALID_CHARS = /^[a-z]{5,10}$/
+const VALID_CHARS = /^[a-z]{3,10}$/
 
 async function fetchText(url) {
   return new Promise((resolve, reject) => {

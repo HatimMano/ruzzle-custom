@@ -11,7 +11,12 @@ import { saveToHistory, getHistory, clearHistory } from './lib/history'
 import type { HistoryEntry } from './lib/history'
 import { playValid, playInvalid, playDuplicate, playStreak, playCountdown, playGo } from './lib/audio'
 
-const TIMER_DURATION = 60
+interface GameConfig {
+  minLetters: 3 | 4 | 5 | 6 | 7
+  duration: 30 | 60 | 120 | 0
+}
+
+const DEFAULT_CONFIG: GameConfig = { minLetters: 5, duration: 60 }
 
 const STREAK_BONUSES: [number, number][] = [[7, 5], [5, 3], [3, 1]]
 function streakBonus(streak: number): number {
@@ -28,9 +33,21 @@ function getSeedFromURL(): string | null {
   return new URLSearchParams(window.location.search).get('seed')
 }
 
-function setURLSeed(seed: string) {
+function getConfigFromURL(): GameConfig {
+  const params = new URLSearchParams(window.location.search)
+  const min = parseInt(params.get('min') || '5')
+  const dur = parseInt(params.get('dur') || '60')
+  return {
+    minLetters: ([3, 4, 5, 6, 7].includes(min) ? min : 5) as GameConfig['minLetters'],
+    duration: ([30, 60, 120, 0].includes(dur) ? dur : 60) as GameConfig['duration'],
+  }
+}
+
+function setURLParams(seed: string, config: GameConfig) {
   const url = new URL(window.location.href)
   url.searchParams.set('seed', seed)
+  url.searchParams.set('min', String(config.minLetters))
+  url.searchParams.set('dur', String(config.duration))
   window.history.replaceState({}, '', url)
 }
 
@@ -48,10 +65,16 @@ function saveBestScore(seed: string, score: number): boolean {
   return false
 }
 
+function durLabel(d: number): string {
+  if (d === 0) return '∞'
+  if (d < 60) return `${d}s`
+  return `${d / 60}min`
+}
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>('loading')
   const [seed, setSeed] = useState<string>('')
+  const [config, setConfig] = useState<GameConfig>(DEFAULT_CONFIG)
   const [grid, setGrid] = useState<GridType | null>(null)
   const [validWords, setValidWords] = useState<Set<string>>(new Set())
   const [foundWords, setFoundWords] = useState<string[]>([])
@@ -75,14 +98,18 @@ export default function App() {
   const scoreAnimTimer = useRef<number>(0)
   const scoreRef = useRef(0)
   const foundWordsRef = useRef<string[]>([])
+  const configRef = useRef<GameConfig>(config)
   scoreRef.current = score
   foundWordsRef.current = foundWords
+  configRef.current = config
 
   useEffect(() => {
     loadDictionary().then(() => {
       setHistory(getHistory())
       const s = getSeedFromURL() || randomSeed()
-      initGame(s)
+      const cfg = getConfigFromURL()
+      setConfig(cfg)
+      initGame(s, cfg)
     })
   }, [])
 
@@ -91,7 +118,7 @@ export default function App() {
     if (countdown === 0) {
       setCountdown(null)
       setGameState('playing')
-      setTimerRunning(true)
+      if (configRef.current.duration > 0) setTimerRunning(true)
       playGo()
       return
     }
@@ -100,14 +127,15 @@ export default function App() {
     return () => clearTimeout(t)
   }, [countdown])
 
-  const initGame = (s: string) => {
+  const initGame = (s: string, cfg: GameConfig = config) => {
     const trie = getTrie()
     if (!trie) return
-    setURLSeed(s)
+    setURLParams(s, cfg)
     setSeed(s)
+    setConfig(cfg)
     setBestScore(getBestScore(s))
     setIsNewBest(false)
-    const { grid: g, validWords: vw } = generateGrid(s, trie)
+    const { grid: g, validWords: vw } = generateGrid(s, trie, cfg.minLetters)
     setGrid(g)
     setValidWords(vw)
     setFoundWords([])
@@ -156,13 +184,14 @@ export default function App() {
 
   const newGame = () => {
     if (gameState === 'playing' && !confirm('Abandonner la partie en cours ?')) return
-    initGame(randomSeed())
+    initGame(randomSeed(), configRef.current)
   }
 
-  const replayGame = () => initGame(seed)
+  const replayGame = () => initGame(seed, config)
 
   const handleWordSubmit = useCallback((cells: Cell[]): FeedbackType => {
     const word = cells.map(c => c.letter).join('').toLowerCase()
+    const { minLetters } = configRef.current
 
     if (foundWords.includes(word)) {
       playDuplicate()
@@ -170,7 +199,7 @@ export default function App() {
       setStreak(0)
       return 'duplicate'
     }
-    if (!isValidWord(word) || word.length < 5) {
+    if (!isValidWord(word) || word.length < minLetters) {
       playInvalid()
       if ('vibrate' in navigator) navigator.vibrate([30, 30, 30])
       setStreak(0)
@@ -186,7 +215,6 @@ export default function App() {
     setScore(prev => prev + total)
     setStreak(newStreak)
 
-    // Animation score
     clearTimeout(scoreAnimTimer.current)
     setScoreAnim({ pts: total, id: Date.now() })
     scoreAnimTimer.current = window.setTimeout(() => setScoreAnim(null), 700)
@@ -208,6 +236,8 @@ export default function App() {
   const copyLink = () => {
     const url = new URL(window.location.href)
     url.searchParams.set('seed', seed)
+    url.searchParams.set('min', String(config.minLetters))
+    url.searchParams.set('dur', String(config.duration))
     navigator.clipboard.writeText(url.toString())
     flash()
   }
@@ -236,7 +266,8 @@ export default function App() {
         foundWords={foundWords}
         validWords={validWords}
         grid={grid}
-        timerDuration={TIMER_DURATION}
+        timerDuration={config.duration}
+        minLetters={config.minLetters}
         isNewBest={isNewBest}
         bestScore={bestScore}
         onReplay={replayGame}
@@ -253,8 +284,48 @@ export default function App() {
     { icon: '✨', label: 'Nouvelle', onClick: newGame },
   ]
 
+  const HistoryDrawer = () => (
+    <div className="absolute inset-0 bg-slate-900/80 z-10 flex items-end" onClick={() => setShowHistory(false)}>
+      <div className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[70vh] flex flex-col gap-3" onClick={e => e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
+        <div className="flex justify-between items-center">
+          <span className="font-bold text-white text-base">Historique</span>
+          {history.length > 0 && (
+            <button onClick={() => { clearHistory(); setHistory([]) }} className="text-xs text-red-400 py-1 px-2">Effacer tout</button>
+          )}
+        </div>
+        <div className="overflow-y-auto flex flex-col gap-2">
+          {history.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucune partie jouée</p>}
+          {history.map((entry, i) => (
+            <button key={i} onClick={() => { setShowHistory(false); initGame(entry.seed, configRef.current) }}
+              className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-800 active:bg-slate-700 text-left w-full transition-colors">
+              <div>
+                <p className="font-mono text-slate-300 text-sm">{entry.seed}</p>
+                <p className="text-slate-600 text-xs mt-0.5">
+                  {new Date(entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-black text-yellow-400 text-lg">{entry.score}<span className="text-xs text-yellow-600 font-normal"> pts</span></p>
+                <p className="text-slate-600 text-xs">{entry.words.length} mots · Rejouer →</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
   // === READY ===
   if (gameState === 'ready') {
+    const minLettersOptions: GameConfig['minLetters'][] = [3, 4, 5, 6, 7]
+    const durationOptions: { value: GameConfig['duration']; label: string }[] = [
+      { value: 30, label: '30s' },
+      { value: 60, label: '1min' },
+      { value: 120, label: '2min' },
+      { value: 0, label: '∞' },
+    ]
+
     return (
       <div className="h-dvh bg-slate-900 flex flex-col max-w-md mx-auto overflow-hidden">
         {/* Header */}
@@ -273,7 +344,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Centre */}
         {countdown !== null ? (
           <div className="flex-1 flex items-center justify-center">
             <span className="text-[120px] font-black text-white animate-pop tabular-nums leading-none">
@@ -281,14 +351,75 @@ export default function App() {
             </span>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
-            <div className="text-center">
-              <p className="text-7xl mb-5">🎯</p>
-              <p className="text-slate-400 text-sm">5L=2 · 6L=4 · 7L=7 · 8L+=12 pts</p>
-              {bestScore !== null && (
-                <p className="text-yellow-600/80 text-xs mt-2 font-medium">🏆 Record : {bestScore} pts</p>
-              )}
+          <div className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+
+            {/* Score record */}
+            {bestScore !== null && (
+              <p className="text-yellow-600/80 text-xs font-medium">🏆 Record sur ce seed : {bestScore} pts</p>
+            )}
+
+            {/* Config card */}
+            <div className="w-full bg-slate-800/60 rounded-3xl p-5 flex flex-col gap-5">
+
+              {/* Durée */}
+              <div className="flex flex-col gap-2.5">
+                <p className="text-slate-400 text-xs font-semibold tracking-widest uppercase">Durée</p>
+                <div className="flex bg-slate-900/60 rounded-full p-1 gap-1">
+                  {durationOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setConfig(prev => ({ ...prev, duration: opt.value }))}
+                      className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all ${
+                        config.duration === opt.value
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 active:text-slate-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lettres min */}
+              <div className="flex flex-col gap-2.5">
+                <p className="text-slate-400 text-xs font-semibold tracking-widest uppercase">Lettres minimum</p>
+                <div className="flex bg-slate-900/60 rounded-full p-1 gap-1">
+                  {minLettersOptions.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setConfig(prev => ({ ...prev, minLetters: n }))}
+                      className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all ${
+                        config.minLetters === n
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 active:text-slate-300'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Score preview */}
+              <div className="flex justify-around pt-1">
+                {([3,4,5,6,7,8] as const)
+                  .filter(l => l >= config.minLetters)
+                  .slice(0, 5)
+                  .map(l => {
+                    const pts = l === 3 || l === 4 ? 1 : l === 5 ? 2 : l === 6 ? 4 : l === 7 ? 7 : 12
+                    const color = pts >= 12 ? 'text-orange-400' : pts >= 7 ? 'text-yellow-400' : pts >= 4 ? 'text-violet-400' : 'text-slate-400'
+                    return (
+                      <div key={l} className="flex flex-col items-center gap-0.5">
+                        <span className={`text-xs font-black ${color}`}>+{pts}</span>
+                        <span className="text-[10px] text-slate-600">{l}L</span>
+                      </div>
+                    )
+                  })}
+              </div>
             </div>
+
+            {/* Bouton démarrer */}
             <button
               onClick={startGame}
               className="flex flex-col items-center gap-2 active:scale-95 transition-transform"
@@ -296,43 +427,15 @@ export default function App() {
               <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center shadow-2xl shadow-blue-600/40">
                 <span className="text-4xl">▶</span>
               </div>
-              <span className="text-white font-bold text-base">Démarrer</span>
+              <span className="text-white font-bold text-base">
+                Démarrer · {config.minLetters}L · {durLabel(config.duration)}
+              </span>
             </button>
+
           </div>
         )}
 
-        {/* Historique drawer */}
-        {showHistory && (
-          <div className="absolute inset-0 bg-slate-900/80 z-10 flex items-end" onClick={() => setShowHistory(false)}>
-            <div className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[70vh] flex flex-col gap-3" onClick={e => e.stopPropagation()}>
-              <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-white text-base">Historique</span>
-                {history.length > 0 && (
-                  <button onClick={() => { clearHistory(); setHistory([]) }} className="text-xs text-red-400 py-1 px-2">Effacer tout</button>
-                )}
-              </div>
-              <div className="overflow-y-auto flex flex-col gap-2">
-                {history.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucune partie jouée</p>}
-                {history.map((entry, i) => (
-                  <button key={i} onClick={() => { setShowHistory(false); initGame(entry.seed) }}
-                    className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-800 active:bg-slate-700 text-left w-full transition-colors">
-                    <div>
-                      <p className="font-mono text-slate-300 text-sm">{entry.seed}</p>
-                      <p className="text-slate-600 text-xs mt-0.5">
-                        {new Date(entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-black text-yellow-400 text-lg">{entry.score}<span className="text-xs text-yellow-600 font-normal"> pts</span></p>
-                      <p className="text-slate-600 text-xs">{entry.words.length} mots · Rejouer →</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {showHistory && <HistoryDrawer />}
       </div>
     )
   }
@@ -373,7 +476,13 @@ export default function App() {
           <span className="text-2xl font-bold text-slate-300 tabular-nums">{foundWords.length}</span>
           <span className="text-slate-600 text-sm">/{validWords.size}</span>
         </div>
-        <Timer key={timerKey} duration={TIMER_DURATION} running={timerRunning} onEnd={endGame} />
+        {config.duration > 0 ? (
+          <Timer key={timerKey} duration={config.duration} running={timerRunning} onEnd={endGame} />
+        ) : (
+          <div className="w-20 h-20 flex items-center justify-center">
+            <span className="text-2xl font-bold text-slate-500">∞</span>
+          </div>
+        )}
       </div>
 
       {/* Grille */}
@@ -384,9 +493,9 @@ export default function App() {
               grid={grid}
               onWordSubmit={handleWordSubmit}
               disabled={false}
+              minLetters={config.minLetters}
             />
           )}
-          {/* Animation score */}
           {scoreAnim && (
             <div
               key={scoreAnim.id}
@@ -438,38 +547,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* Historique drawer */}
-      {showHistory && (
-        <div className="absolute inset-0 bg-slate-900/80 z-10 flex items-end" onClick={() => setShowHistory(false)}>
-          <div className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[70vh] flex flex-col gap-3" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-white text-base">Historique</span>
-              {history.length > 0 && (
-                <button onClick={() => { clearHistory(); setHistory([]) }} className="text-xs text-red-400 py-1 px-2">Effacer tout</button>
-              )}
-            </div>
-            <div className="overflow-y-auto flex flex-col gap-2">
-              {history.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucune partie jouée</p>}
-              {history.map((entry, i) => (
-                <button key={i} onClick={() => { setShowHistory(false); initGame(entry.seed) }}
-                  className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-800 active:bg-slate-700 text-left w-full transition-colors">
-                  <div>
-                    <p className="font-mono text-slate-300 text-sm">{entry.seed}</p>
-                    <p className="text-slate-600 text-xs mt-0.5">
-                      {new Date(entry.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-black text-yellow-400 text-lg">{entry.score}<span className="text-xs text-yellow-600 font-normal"> pts</span></p>
-                    <p className="text-slate-600 text-xs">{entry.words.length} mots · Rejouer →</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {showHistory && <HistoryDrawer />}
     </div>
   )
 }

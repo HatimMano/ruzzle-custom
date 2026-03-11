@@ -45,7 +45,7 @@ function getNeighbors(row: number, col: number, size = 4): [number, number][] {
 }
 
 // DFS pour trouver tous les mots valides dans une grille
-function findAllWords(grid: Grid, trie: Trie): Set<string> {
+function findAllWords(grid: Grid, trie: Trie, minLetters = 5): Set<string> {
   const found = new Set<string>()
   const size = grid.length
 
@@ -60,7 +60,7 @@ function findAllWords(grid: Grid, trie: Trie): Set<string> {
     if (!nextNode) return
 
     const word = path + letter
-    if (nextNode.isWord && word.length >= 5) found.add(word)
+    if (nextNode.isWord && word.length >= minLetters) found.add(word)
 
     // Élagage : si aucun préfixe possible, on arrête
     if (nextNode.children.size === 0) return
@@ -98,22 +98,29 @@ function generateRandomGrid(rand: () => number): Grid {
   )
 }
 
-// Génère une grille garantissant MIN_WORDS mots valides de 5+ lettres
-const MIN_WORDS = 15
 const MAX_ATTEMPTS = 200
 
-export function generateGrid(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> } {
+function minWordsForConfig(minLetters: number): number {
+  if (minLetters <= 3) return 30
+  if (minLetters === 4) return 20
+  if (minLetters === 5) return 15
+  if (minLetters === 6) return 8
+  return 4
+}
+
+export function generateGrid(seed: string, trie: Trie, minLetters = 5): { grid: Grid; validWords: Set<string> } {
   const numericSeed = seedFromString(seed)
   const rand = mulberry32(numericSeed)
+  const minWords = minWordsForConfig(minLetters)
 
   let bestGrid: Grid | null = null
   let bestWords: Set<string> = new Set()
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const grid = generateRandomGrid(rand)
-    const words = findAllWords(grid, trie)
+    const words = findAllWords(grid, trie, minLetters)
 
-    if (words.size >= MIN_WORDS) {
+    if (words.size >= minWords) {
       return { grid, validWords: words }
     }
 

@@ -11,6 +11,7 @@ interface Props {
   validWords: Set<string>
   grid: GridType
   timerDuration: number
+  minLetters: number
   isNewBest: boolean
   bestScore: number | null
   onReplay: () => void
@@ -21,6 +22,7 @@ interface Props {
 type Tab = 'trouves' | 'rates'
 
 const SCORE_COLOR: Record<number, string> = {
+  1:  'text-slate-400',
   2:  'text-slate-400',
   4:  'text-violet-400',
   7:  'text-yellow-400',
@@ -28,6 +30,7 @@ const SCORE_COLOR: Record<number, string> = {
 }
 
 const SCORE_BG: Record<number, string> = {
+  1:  'bg-slate-800',
   2:  'bg-slate-800',
   4:  'bg-violet-900/40',
   7:  'bg-yellow-900/40',
@@ -35,7 +38,7 @@ const SCORE_BG: Record<number, string> = {
 }
 
 export default function ResultsScreen({
-  seed, score, foundWords, validWords, grid, timerDuration,
+  seed, score, foundWords, validWords, grid, timerDuration, minLetters,
   isNewBest, bestScore, onReplay, onNewGame, onCopyLink,
 }: Props) {
   const [tab, setTab] = useState<Tab>('trouves')
@@ -52,7 +55,7 @@ export default function ResultsScreen({
 
   const mins = Math.floor(timerDuration / 60)
   const secs = timerDuration % 60
-  const timeStr = mins > 0 ? `${mins}m${secs > 0 ? secs + 's' : ''}` : `${secs}s`
+  const timeStr = timerDuration === 0 ? '∞' : (mins > 0 ? `${mins}m${secs > 0 ? secs + 's' : ''}` : `${secs}s`)
 
   const summary = [
     `🎯 Ruzzle — seed: ${seed}`,
@@ -76,7 +79,10 @@ export default function ResultsScreen({
 
       {/* Hero */}
       <div className="px-5 pt-6 pb-5 flex-none">
-        <p className="text-[10px] text-slate-600 font-mono tracking-widest mb-4">SEED : {seed}</p>
+        <div className="flex items-center gap-3 mb-4">
+          <p className="text-[10px] text-slate-600 font-mono tracking-widest">SEED : {seed}</p>
+          <span className="text-[10px] text-slate-700 font-mono">{minLetters}L+ · {timeStr}</span>
+        </div>
 
         <div className="flex items-center justify-between">
           <div>

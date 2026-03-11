@@ -7,7 +7,8 @@ interface GridProps {
   grid: GridType
   onWordSubmit: (cells: Cell[]) => FeedbackType
   disabled?: boolean
-  discoveryPath?: Cell[] // chemin à mettre en évidence (mode découverte)
+  discoveryPath?: Cell[]
+  minLetters?: number
 }
 
 const FEEDBACK_COLORS: Record<NonNullable<FeedbackType>, string> = {
@@ -22,7 +23,7 @@ const FEEDBACK_ANIM: Record<NonNullable<FeedbackType>, string> = {
   invalid: 'animate-shake',
 }
 
-export default function Grid({ grid, onWordSubmit, disabled, discoveryPath }: GridProps) {
+export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minLetters = 5 }: GridProps) {
   const [selectedCells, setSelectedCells] = useState<Cell[]>([])
   const [feedback, setFeedback] = useState<FeedbackType>(null)
   const [feedbackCells, setFeedbackCells] = useState<Set<string>>(new Set())
@@ -47,7 +48,7 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath }: Gr
   }
 
   const submitSelection = useCallback(() => {
-    if (selectedCells.length < 5) {
+    if (selectedCells.length < minLetters) {
       setSelectedCells([])
       return
     }
@@ -84,7 +85,7 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath }: Gr
     if (canSelect(cell) && !isSelected(cell)) {
       setSelectedCells(prev => {
         const next = [...prev, cell]
-        if (next.length >= 5) {
+        if (next.length >= minLetters) {
           const result = onWordSubmit(next)
           if (result) {
             const keys = new Set(next.map(cellKey))

@@ -122,6 +122,12 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
     const rowStr = el.getAttribute('data-row')
     const colStr = el.getAttribute('data-col')
     if (rowStr === null || colStr === null) return null
+    // Reject if touch is in the outer 25% of the cell (gap/border area)
+    const rect = el.getBoundingClientRect()
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    const dist = Math.sqrt((touch.clientX - cx) ** 2 + (touch.clientY - cy) ** 2)
+    if (dist > rect.width * 0.38) return null
     return grid[parseInt(rowStr)][parseInt(colStr)]
   }
 

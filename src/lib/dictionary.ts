@@ -43,7 +43,7 @@ export async function loadDictionary(): Promise<Set<string>> {
   loadPromise = fetch('/words_fr.txt')
     .then(r => r.text())
     .then(text => {
-      const words = text.split('\n').filter(w => w.length >= 5 && w.length <= 10)
+      const words = text.split('\n').filter(w => w.length >= 3 && w.length <= 10)
       wordSet = new Set(words)
       trie = new Trie()
       for (const w of words) trie.insert(w)

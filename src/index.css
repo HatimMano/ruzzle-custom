@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); }
+}
+
+.animate-pop { animation: pop 0.3s ease; }
+.animate-shake { animation: shake 0.3s ease; }
+.animate-slideIn { animation: slideIn 0.3s ease; }
+.animate-glow { animation: glow 0.8s ease; }
+
+@keyframes floatScore {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  60%  { opacity: 1; transform: translateX(-50%) translateY(-18px) scale(1.15); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-36px) scale(0.9); }
+}
+.animate-floatScore { animation: floatScore 0.7s ease forwards; }

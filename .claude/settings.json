@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init)",
+      "Bash(git remote add origin https://github.com/HatimMano/ruzzle-custom.git)",
+      "Bash(git remote set-url origin https://github.com/HatimMano/ruzzle-custom.git)"
+    ]
+  }
+}

@@ -1,147 +1,299 @@
-import { useRef, useState } from 'react'
-import Grid from './Grid'
-import { scoreForWord } from '../lib/scoring'
-import { findWordPath } from '../lib/gridGenerator'
-import type { Cell, Grid as GridType } from '../lib/gridGenerator'
+import { useRef, useState } from "react";
+import Grid from "./Grid";
+import { scoreForWord } from "../lib/scoring";
+import { findWordPath } from "../lib/gridGenerator";
+import type { Cell, Grid as GridType } from "../lib/gridGenerator";
 
 interface Props {
-  seed: string
-  score: number
-  foundWords: string[]
-  validWords: Set<string>
-  grid: GridType
-  timerDuration: number
-  minLetters: number
-  isNewBest: boolean
-  bestScore: number | null
-  onReplay: () => void
-  onNewGame: () => void
-  onCopyLink: () => void
+  seed: string;
+  score: number;
+  foundWords: string[];
+  validWords: Set<string>;
+  grid: GridType;
+  timerDuration: number;
+  minLetters: number;
+  isNewBest: boolean;
+  bestScore: number | null;
+  onReplay: () => void;
+  onNewGame: () => void;
+  onCopyLink: () => void;
 }
 
-type Tab = 'trouves' | 'rates'
+type Tab = "trouves" | "rates";
 
-const SCORE_COLOR: Record<number, string> = {
-  1:  'text-slate-400',
-  2:  'text-slate-400',
-  4:  'text-violet-400',
-  7:  'text-yellow-400',
-  12: 'text-orange-400',
-}
-
-const SCORE_BG: Record<number, string> = {
-  1:  'bg-slate-800',
-  2:  'bg-slate-800',
-  4:  'bg-violet-900/40',
-  7:  'bg-yellow-900/40',
-  12: 'bg-orange-900/40',
-}
+const SCORE_STYLE: Record<number, { color: string; bg: string }> = {
+  1: { color: "#94a3b8", bg: "rgba(71,85,105,0.25)" },
+  2: { color: "#94a3b8", bg: "rgba(71,85,105,0.25)" },
+  4: { color: "#a78bfa", bg: "rgba(109,40,217,0.2)" },
+  7: { color: "#fbbf24", bg: "rgba(161,98,7,0.25)" },
+  12: { color: "#fb923c", bg: "rgba(154,52,18,0.25)" },
+};
 
 export default function ResultsScreen({
-  seed, score, foundWords, validWords, grid, timerDuration, minLetters,
-  isNewBest, bestScore, onReplay, onNewGame, onCopyLink,
+  seed,
+  score,
+  foundWords,
+  validWords,
+  grid,
+  timerDuration,
+  minLetters,
+  isNewBest,
+  bestScore,
+  onReplay,
+  onNewGame,
+  onCopyLink,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('trouves')
-  const [discoveryWord, setDiscoveryWord] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<number>(0)
+  const [tab, setTab] = useState<Tab>("trouves");
+  const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<number>(0);
 
   const missed = [...validWords]
-    .filter(w => !foundWords.includes(w))
-    .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b))
+    .filter((w) => !foundWords.includes(w))
+    .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b));
 
-  const pct = validWords.size > 0 ? Math.round(foundWords.length / validWords.size * 100) : 0
-  const discoveryPath: Cell[] | null = discoveryWord ? findWordPath(grid, discoveryWord) : null
+  const pct =
+    validWords.size > 0
+      ? Math.round((foundWords.length / validWords.size) * 100)
+      : 0;
+  const discoveryPath: Cell[] | null = discoveryWord
+    ? findWordPath(grid, discoveryWord)
+    : null;
 
-  const mins = Math.floor(timerDuration / 60)
-  const secs = timerDuration % 60
-  const timeStr = timerDuration === 0 ? '∞' : (mins > 0 ? `${mins}m${secs > 0 ? secs + 's' : ''}` : `${secs}s`)
+  const mins = Math.floor(timerDuration / 60);
+  const secs = timerDuration % 60;
+  const timeStr =
+    timerDuration === 0
+      ? "∞"
+      : mins > 0
+      ? `${mins}m${secs > 0 ? secs + "s" : ""}`
+      : `${secs}s`;
 
   const summary = [
-    `🎯 Ruzzle — seed: ${seed}`,
+    `🎯 Griddle — seed: ${seed}`,
     `⏱ ${timeStr} | 🏆 ${score} pts | 📝 ${foundWords.length}/${validWords.size} mots`,
-    '',
-    ...foundWords.map(w => {
-      const s = scoreForWord(w)
-      return `${s >= 12 ? '🔥' : s >= 7 ? '⭐' : s >= 4 ? '✨' : '·'} ${w.toUpperCase()} (+${s}pts)`
+    "",
+    ...foundWords.map((w) => {
+      const s = scoreForWord(w);
+      return `${
+        s >= 12 ? "🔥" : s >= 7 ? "⭐" : s >= 4 ? "✨" : "·"
+      } ${w.toUpperCase()} (+${s}pts)`;
     }),
-  ].join('\n')
+  ].join("\n");
 
   function copySummary() {
-    navigator.clipboard.writeText(summary)
-    setCopied(true)
-    clearTimeout(copiedTimer.current)
-    copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
+    navigator.clipboard.writeText(summary);
+    setCopied(true);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 2000);
   }
 
-  return (
-    <div className="h-dvh bg-slate-900 flex flex-col max-w-md mx-auto">
+  const scoreStyle = (s: number) => SCORE_STYLE[s] ?? SCORE_STYLE[1];
 
-      {/* Hero */}
-      <div className="px-5 pt-6 pb-5 flex-none">
-        <div className="flex items-center gap-3 mb-4">
-          <p className="text-[10px] text-slate-600 font-mono tracking-widest">SEED : {seed}</p>
-          <span className="text-[10px] text-slate-700 font-mono">{minLetters}L+ · {timeStr}</span>
+  return (
+    <div
+      style={{
+        height: "100dvh",
+        background: "#0b1120",
+        display: "flex",
+        flexDirection: "column",
+        maxWidth: "28rem",
+        margin: "0 auto",
+      }}
+    >
+      {/* Hero header */}
+      <div style={{ padding: "1.5rem 1.25rem 1rem", flexShrink: 0 }}>
+        {/* Seed + config */}
+        <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+          <span
+            style={{
+              fontSize: "0.7rem",
+              color: "#334155",
+              fontFamily: "monospace",
+              letterSpacing: "0.08em",
+            }}
+          >
+            SEED : {seed}
+          </span>
+          <span
+            style={{
+              fontSize: "0.7rem",
+              color: "#1e293b",
+              fontFamily: "monospace",
+            }}
+          >
+            {minLetters}L+ · {timeStr}
+          </span>
         </div>
 
-        <div className="flex items-center justify-between">
+        {/* Score row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           <div>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-6xl font-black tabular-nums leading-none ${isNewBest ? 'text-yellow-400' : 'text-white'}`}>
+            <div
+              style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}
+            >
+              <span
+                style={{
+                  fontSize: "3.75rem",
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums",
+                  color: isNewBest ? "#fbbf24" : "white",
+                }}
+              >
                 {score}
               </span>
-              <span className="text-slate-500 text-lg font-medium">pts</span>
+              <span
+                style={{
+                  fontSize: "1.1rem",
+                  fontWeight: 500,
+                  color: "#475569",
+                }}
+              >
+                pts
+              </span>
             </div>
-            {isNewBest
-              ? <p className="text-yellow-500 text-xs font-semibold mt-1.5">🏆 Nouveau record !</p>
-              : bestScore !== null
-              ? <p className="text-slate-600 text-xs mt-1.5">record : {bestScore} pts</p>
-              : null
-            }
+            {isNewBest ? (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: "#f59e0b",
+                  marginTop: "0.25rem",
+                }}
+              >
+                🏆 Nouveau record !
+              </p>
+            ) : bestScore !== null ? (
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#334155",
+                  marginTop: "0.25rem",
+                }}
+              >
+                record : {bestScore} pts
+              </p>
+            ) : null}
           </div>
 
-          {/* Cercle progression */}
-          <div className="relative w-20 h-20">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
-              <circle cx="40" cy="40" r="34" fill="none" stroke="#1e293b" strokeWidth="7" />
+          {/* Progress circle */}
+          <div style={{ position: "relative", width: "5rem", height: "5rem" }}>
+            <svg
+              style={{
+                width: "100%",
+                height: "100%",
+                transform: "rotate(-90deg)",
+              }}
+              viewBox="0 0 80 80"
+            >
               <circle
-                cx="40" cy="40" r="34" fill="none"
-                stroke={pct >= 80 ? '#22c55e' : pct >= 50 ? '#3b82f6' : '#64748b'}
+                cx="40"
+                cy="40"
+                r="34"
+                fill="none"
+                stroke="rgba(30,41,59,0.8)"
+                strokeWidth="7"
+              />
+              <circle
+                cx="40"
+                cy="40"
+                r="34"
+                fill="none"
+                stroke={
+                  pct >= 80 ? "#22c55e" : pct >= 50 ? "#3b82f6" : "#475569"
+                }
                 strokeWidth="7"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 34}`}
                 strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct / 100)}`}
-                className="transition-all duration-700"
+                style={{ transition: "stroke-dashoffset 0.7s ease" }}
               />
             </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-white font-black text-lg leading-none tabular-nums">{foundWords.length}</span>
-              <span className="text-slate-500 text-[10px]">/{validWords.size}</span>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  color: "white",
+                  fontWeight: 900,
+                  fontSize: "1.1rem",
+                  lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {foundWords.length}
+              </span>
+              <span style={{ color: "#475569", fontSize: "0.65rem" }}>
+                /{validWords.size}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs — pill style */}
-      <div className="flex-none px-5 pb-3">
-        <div className="flex bg-slate-800/60 rounded-full p-1 gap-1">
-          {([
-            { id: 'trouves' as Tab, label: 'Trouvés', n: foundWords.length },
-            { id: 'rates'   as Tab, label: 'Ratés',   n: missed.length },
-          ]).map(t => (
+      {/* Tab bar */}
+      <div style={{ padding: "0 1.25rem 0.75rem", flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            background: "rgba(30,41,59,0.9)",
+            borderRadius: "999px",
+            padding: "0.3rem",
+            gap: "0.25rem",
+          }}
+        >
+          {[
+            { id: "trouves" as Tab, label: "Trouvés", n: foundWords.length },
+            { id: "rates" as Tab, label: "Ratés", n: missed.length },
+          ].map((t) => (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id); setDiscoveryWord(null) }}
-              className={`flex-1 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                tab === t.id
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500'
-              }`}
+              onClick={() => {
+                setTab(t.id);
+                setDiscoveryWord(null);
+              }}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+                padding: "0.6rem 0",
+                borderRadius: "999px",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                background: tab === t.id ? "white" : "transparent",
+                color: tab === t.id ? "#0f172a" : "#475569",
+                border: "none",
+              }}
             >
               {t.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                tab === t.id ? 'bg-slate-100 text-slate-600' : 'bg-slate-700 text-slate-500'
-              }`}>
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  padding: "0.1rem 0.4rem",
+                  borderRadius: "999px",
+                  background: tab === t.id ? "#e2e8f0" : "rgba(71,85,105,0.4)",
+                  color: tab === t.id ? "#475569" : "#64748b",
+                }}
+              >
                 {t.n}
               </span>
             </button>
@@ -149,93 +301,263 @@ export default function ResultsScreen({
         </div>
       </div>
 
-      {/* Liste — scrollable */}
-      <div className="flex-1 overflow-y-auto px-5">
-
-        {tab === 'trouves' && (
-          <div className="pb-4">
+      {/* Scrollable list */}
+      <div
+        style={
+          {
+            flex: 1,
+            overflowY: "auto",
+            padding: "0 1.25rem",
+            WebkitOverflowScrolling: "touch",
+          } as React.CSSProperties
+        }
+      >
+        {tab === "trouves" && (
+          <div style={{ paddingBottom: "1rem" }}>
             {foundWords.length === 0 && (
-              <p className="text-slate-600 text-sm text-center py-12">Aucun mot trouvé</p>
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#334155",
+                  fontSize: "0.875rem",
+                  padding: "3rem 0",
+                }}
+              >
+                Aucun mot trouvé
+              </p>
             )}
             {[...foundWords].reverse().map((w, i) => {
-              const s = scoreForWord(w)
+              const s = scoreForWord(w);
+              const { color, bg } = scoreStyle(s);
               return (
                 <div
                   key={w}
-                  className={`flex items-center justify-between py-3 ${i > 0 ? 'border-t border-slate-800/80' : ''}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.8rem 0",
+                    borderTop: i > 0 ? "1px solid rgba(30,41,59,0.8)" : "none",
+                  }}
                 >
-                  <span className="font-semibold text-white uppercase tracking-wide text-[15px]">{w}</span>
-                  <span className={`text-xs font-bold tabular-nums px-2 py-1 rounded-full ${SCORE_BG[s] ?? 'bg-slate-800'} ${SCORE_COLOR[s] ?? 'text-slate-400'}`}>+{s} pts</span>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: "white",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      fontSize: "0.95rem",
+                    }}
+                  >
+                    {w}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      padding: "0.2rem 0.55rem",
+                      borderRadius: "999px",
+                      background: bg,
+                      color,
+                    }}
+                  >
+                    +{s} pts
+                  </span>
                 </div>
-              )
+              );
             })}
           </div>
         )}
 
-        {tab === 'rates' && (
-          <div className="pb-4">
+        {tab === "rates" && (
+          <div style={{ paddingBottom: "1rem" }}>
             {missed.length === 0 && (
-              <p className="text-green-500 text-sm text-center py-12">🎉 Tu as tout trouvé !</p>
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#10b981",
+                  fontSize: "0.875rem",
+                  padding: "3rem 0",
+                }}
+              >
+                🎉 Tu as tout trouvé !
+              </p>
             )}
 
             {discoveryWord && (
-              <div className="mb-4 p-4 rounded-3xl bg-slate-800/80 border border-violet-500/20 flex flex-col items-center gap-2">
-                <p className="text-violet-300 font-bold tracking-widest uppercase text-sm">{discoveryWord}</p>
-                {discoveryPath
-                  ? <Grid grid={grid} onWordSubmit={() => null} disabled discoveryPath={discoveryPath} />
-                  : <p className="text-slate-500 text-sm">Chemin non trouvé</p>
-                }
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "0.75rem",
+                  padding: "1rem",
+                  borderRadius: "1.25rem",
+                  background: "rgba(30,41,59,0.8)",
+                  border: "1px solid rgba(109,40,217,0.2)",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: "#c4b5fd",
+                  }}
+                >
+                  {discoveryWord.toUpperCase()}
+                </p>
+                {discoveryPath ? (
+                  <Grid
+                    grid={grid}
+                    onWordSubmit={() => null}
+                    disabled
+                    discoveryPath={discoveryPath}
+                  />
+                ) : (
+                  <p style={{ fontSize: "0.875rem", color: "#475569" }}>
+                    Chemin non trouvé
+                  </p>
+                )}
               </div>
             )}
 
             {missed.map((w, i) => {
-              const s = scoreForWord(w)
-              const active = discoveryWord === w
+              const s = scoreForWord(w);
+              const { color, bg } = scoreStyle(s);
+              const active = discoveryWord === w;
               return (
                 <button
                   key={w}
-                  onClick={() => setDiscoveryWord(prev => prev === w ? null : w)}
-                  className={`flex items-center justify-between py-3 w-full text-left ${
-                    i > 0 ? 'border-t border-slate-800/80' : ''
-                  }`}
+                  onClick={() =>
+                    setDiscoveryWord((prev) => (prev === w ? null : w))
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "0.8rem 0",
+                    borderTop: i > 0 ? "1px solid rgba(30,41,59,0.8)" : "none",
+                    background: "transparent",
+                    border: "none",
+                    borderTopStyle: i > 0 ? "solid" : undefined,
+                    cursor: "pointer",
+                  }}
                 >
-                  <span className={`font-semibold uppercase tracking-wide text-[15px] transition-colors ${active ? 'text-violet-300' : 'text-slate-400'}`}>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      fontSize: "0.95rem",
+                      color: active ? "#c4b5fd" : "#64748b",
+                      transition: "color 0.15s",
+                    }}
+                  >
                     {w}
                   </span>
-                  <span className={`text-xs font-bold tabular-nums px-2 py-1 rounded-full ${SCORE_BG[s] ?? 'bg-slate-800'} ${active ? 'text-violet-300' : SCORE_COLOR[s] ?? 'text-slate-500'}`}>+{s} pts</span>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      fontVariantNumeric: "tabular-nums",
+                      padding: "0.2rem 0.55rem",
+                      borderRadius: "999px",
+                      background: active ? "rgba(109,40,217,0.2)" : bg,
+                      color: active ? "#c4b5fd" : color,
+                    }}
+                  >
+                    +{s} pts
+                  </span>
                 </button>
-              )
+              );
             })}
           </div>
         )}
       </div>
 
       {/* Bottom actions */}
-      <div className="flex-none px-6 pt-4 pb-7 border-t border-slate-800/80">
-        <div className="flex justify-around">
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "1rem 1.5rem 2rem",
+          borderTop: "1px solid rgba(30,41,59,0.8)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-around" }}>
           {[
-            { icon: copied ? '✓' : '📋', label: copied ? 'Copié !' : 'Résumé', onClick: copySummary, primary: true },
-            { icon: '🔗', label: 'Partager', onClick: onCopyLink, primary: false },
-            { icon: '↺', label: 'Rejouer', onClick: onReplay, primary: false },
-            { icon: '✨', label: 'Nouvelle', onClick: onNewGame, primary: false },
-          ].map(btn => (
+            {
+              icon: copied ? "✓" : "📋",
+              label: copied ? "Copié !" : "Résumé",
+              onClick: copySummary,
+              primary: true,
+            },
+            {
+              icon: "🔗",
+              label: "Partager",
+              onClick: onCopyLink,
+              primary: false,
+            },
+            { icon: "↺", label: "Rejouer", onClick: onReplay, primary: false },
+            {
+              icon: "✨",
+              label: "Nouvelle",
+              onClick: onNewGame,
+              primary: false,
+            },
+          ].map((btn) => (
             <button
               key={btn.label}
               onClick={btn.onClick}
-              className="flex flex-col items-center gap-1 active:opacity-60 transition-opacity"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.3rem",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                opacity: 1,
+                transition: "opacity 0.15s",
+              }}
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg ${
-                btn.primary
-                  ? 'bg-blue-600 shadow-blue-600/30'
-                  : 'bg-slate-800'
-              }`}>
+              <div
+                style={{
+                  width: "3.5rem",
+                  height: "3.5rem",
+                  borderRadius: "999px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.4rem",
+                  background: btn.primary ? "#3b82f6" : "rgba(30,41,59,0.9)",
+                  border: btn.primary
+                    ? "none"
+                    : "1px solid rgba(71,85,105,0.3)",
+                  boxShadow: btn.primary
+                    ? "0 0 20px rgba(59,130,246,0.35)"
+                    : "none",
+                }}
+              >
                 {btn.icon}
               </div>
-              <span className="text-[10px] text-slate-500 font-medium mt-0.5">{btn.label}</span>
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  color: "#475569",
+                  fontWeight: 500,
+                }}
+              >
+                {btn.label}
+              </span>
             </button>
           ))}
         </div>
       </div>
     </div>
-  )
+  );
 }

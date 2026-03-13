@@ -1,70 +1,119 @@
-import { useState, useRef } from 'react'
-import { scoreForWord } from '../lib/scoring'
-import { findWordPath } from '../lib/gridGenerator'
-import type { Cell, Grid as GridType } from '../lib/gridGenerator'
-import Grid from './Grid'
+import { useState, useRef, useEffect } from "react";
+import { Copy, Home } from "lucide-react";
+import { scoreForWord } from "../lib/scoring";
+import { findWordPath } from "../lib/gridGenerator";
+import type { Cell, Grid as GridType } from "../lib/gridGenerator";
+import Grid from "./Grid";
+import { fetchDailyLeaderboard } from "../lib/api";
+import type { LeaderboardEntry } from "../lib/api";
 
-const PYRAMID_LENGTHS = [3, 4, 5, 6, 7, 8] as const
-
-const SCORE_COLOR: Record<number, string> = {
-  1: 'text-slate-400', 2: 'text-slate-400',
-  4: 'text-violet-400', 7: 'text-yellow-400', 12: 'text-orange-400',
-}
-const SCORE_BG: Record<number, string> = {
-  1: 'bg-slate-800', 2: 'bg-slate-800',
-  4: 'bg-violet-900/40', 7: 'bg-yellow-900/40', 12: 'bg-orange-900/40',
-}
+const PYRAMID_LENGTHS = [3, 4, 5, 6, 7, 8] as const;
 
 interface Props {
-  date: string
-  elapsedSeconds: number
-  pyramidFound: Record<number, string>
-  foundWords: string[]
-  validWords: Set<string>
-  grid: GridType
-  onBack: () => void
+  date: string;
+  elapsedSeconds: number;
+  pyramidFound: Record<number, string>;
+  foundWords: string[];
+  validWords: Set<string>;
+  grid: GridType;
+  onBack: () => void;
 }
 
-type Tab = 'pyramide' | 'rates'
+type Tab = "pyramide" | "classement" | "rates";
 
 function fmtTime(secs: number): string {
-  const m = Math.floor(secs / 60)
-  const s = secs % 60
-  return m > 0 ? `${m}m${String(s).padStart(2, '0')}s` : `${s}s`
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
 }
 
-function PyramidSlot({ len, word }: { len: number; word?: string }) {
-  const label = len === 8 ? '8L+' : `${len}L`
-  const filled = !!word
+function PyramidSlotCard({
+  letters,
+  word,
+}: {
+  letters: string;
+  word?: string;
+}) {
   return (
-    <div className={`w-24 h-[72px] flex flex-col items-center justify-center rounded-2xl border transition-all duration-300 ${
-      filled
-        ? 'bg-green-500/15 border-green-500/40 shadow-lg shadow-green-500/10'
-        : 'bg-slate-800/60 border-slate-700'
-    }`}>
-      <span className={`text-[11px] font-bold ${filled ? 'text-green-400' : 'text-slate-600'}`}>{label}</span>
-      {word
-        ? <span className="text-[10px] text-green-300 uppercase font-mono mt-1 text-center leading-tight px-1 break-all">{word}</span>
-        : <span className="text-slate-700 text-lg mt-0.5">·</span>
-      }
+    <div
+      style={{
+        width: "5.5rem",
+        height: "4.25rem",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "0.875rem",
+        border: word
+          ? "2px solid rgba(16,185,129,0.4)"
+          : "2px solid rgba(71,85,105,0.5)",
+        background: word ? "rgba(16,185,129,0.12)" : "rgba(30,41,59,0.9)",
+      }}
+    >
+      {word ? (
+        <span
+          style={{
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            letterSpacing: "0.05em",
+            color: "#34d399",
+          }}
+        >
+          {word.toUpperCase()}
+        </span>
+      ) : (
+        <span
+          style={{ fontSize: "0.85rem", fontWeight: 600, color: "#475569" }}
+        >
+          {letters}
+        </span>
+      )}
     </div>
-  )
+  );
 }
 
-export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound, foundWords, validWords, grid, onBack }: Props) {
-  const [tab, setTab] = useState<Tab>('pyramide')
-  const [discoveryWord, setDiscoveryWord] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<number>(0)
+const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
-  const completed = PYRAMID_LENGTHS.every(l => !!pyramidFound[l])
-  const found = PYRAMID_LENGTHS.filter(l => !!pyramidFound[l]).length
+export default function DailyResultsScreen({
+  date,
+  elapsedSeconds,
+  pyramidFound,
+  foundWords,
+  validWords,
+  grid,
+  onBack,
+}: Props) {
+  const [tab, setTab] = useState<Tab>("pyramide");
+  const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const copiedTimer = useRef<number>(0);
+
+  const completed = PYRAMID_LENGTHS.every((l) => !!pyramidFound[l]);
+  const found = PYRAMID_LENGTHS.filter((l) => !!pyramidFound[l]).length;
 
   const missed = [...validWords]
-    .filter(w => !foundWords.includes(w))
-    .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b))
+    .filter((w) => !foundWords.includes(w))
+    .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b));
 
-  const discoveryPath: Cell[] | null = discoveryWord ? findWordPath(grid, discoveryWord) : null
+  const discoveryPath: Cell[] | null = discoveryWord
+    ? findWordPath(grid, discoveryWord)
+    : null;
+
+  const score = PYRAMID_LENGTHS.reduce((acc, l) => {
+    if (!pyramidFound[l]) return acc;
+    return acc + scoreForWord(pyramidFound[l]);
+  }, 0);
+
+  useEffect(() => {
+    if (tab !== "classement") return;
+    if (leaderboard.length > 0) return;
+    setLeaderboardLoading(true);
+    fetchDailyLeaderboard(date)
+      .then(setLeaderboard)
+      .finally(() => setLeaderboardLoading(false));
+  }, [tab, date, leaderboard.length]);
 
   function copySummary() {
     const lines = [
@@ -72,141 +121,441 @@ export default function DailyResultsScreen({ date, elapsedSeconds, pyramidFound,
       completed
         ? `🏆 Pyramide complète en ${fmtTime(elapsedSeconds)} !`
         : `🔶 ${found}/6 niveaux — ${fmtTime(elapsedSeconds)}`,
-      '',
-      ...PYRAMID_LENGTHS.map(l => {
-        const w = pyramidFound[l]
-        const lbl = l === 8 ? '8L+' : `${l}L`
-        return `${w ? '✅' : '⬜'} ${lbl}${w ? ' · ' + w.toUpperCase() : ''}`
+      "",
+      ...PYRAMID_LENGTHS.map((l) => {
+        const w = pyramidFound[l];
+        const lbl = l === 8 ? "8L+" : `${l}L`;
+        return `${w ? "✅" : "⬜"} ${lbl}${w ? " · " + w.toUpperCase() : ""}`;
       }),
-    ]
-    navigator.clipboard.writeText(lines.join('\n'))
-    setCopied(true)
-    clearTimeout(copiedTimer.current)
-    copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 2000);
   }
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "pyramide", label: "Pyramide" },
+    { id: "classement", label: "Classement" },
+    { id: "rates", label: `Ratés (${missed.length})` },
+  ];
+
   return (
-    <div className="h-dvh bg-slate-900 flex flex-col max-w-md mx-auto">
-      {/* Header */}
-      <div className="px-5 pt-6 pb-4 flex-none">
-        <p className="text-[10px] text-slate-600 font-mono tracking-widest mb-3">⚡ DÉFI DU JOUR · {date}</p>
-
-        {completed ? (
-          <div>
-            <span className="text-6xl font-black text-yellow-400 tabular-nums leading-none">{fmtTime(elapsedSeconds)}</span>
-            <p className="text-yellow-500 text-xs font-semibold mt-2">🏆 Pyramide complète !</p>
+    <div
+      style={{
+        height: "100dvh",
+        background: "#0b1120",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "28rem",
+          width: "100%",
+          margin: "0 auto",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem",
+          overflow: "hidden",
+          padding: "1.25rem 1rem 0",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.35rem",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "0.7rem",
+              fontWeight: 500,
+              letterSpacing: "0.12em",
+              color: "#64748b",
+            }}
+          >
+            DÉFI DU JOUR · {date}
+          </p>
+          <p
+            style={{
+              fontSize: "2.5rem",
+              fontWeight: 700,
+              color: "white",
+              lineHeight: 1.1,
+            }}
+          >
+            {score} pts
+          </p>
+          <p style={{ fontSize: "1rem", color: "#64748b" }}>
+            {fmtTime(elapsedSeconds)}
+          </p>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "0.25rem",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.3rem 1rem",
+                borderRadius: "999px",
+                background: completed
+                  ? "rgba(16,185,129,0.12)"
+                  : "rgba(30,41,59,0.8)",
+                border: completed
+                  ? "1px solid rgba(16,185,129,0.3)"
+                  : "1px solid rgba(71,85,105,0.4)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                color: completed ? "#34d399" : "#64748b",
+              }}
+            >
+              {completed ? "Pyramide complète 🏆" : `${found}/6 niveaux`}
+            </span>
           </div>
-        ) : (
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-black text-white tabular-nums leading-none">{found}</span>
-              <span className="text-slate-500 text-xl font-medium">/6 niveaux</span>
-            </div>
-            <p className="text-slate-500 text-xs mt-1.5">Pyramide incomplète · {fmtTime(elapsedSeconds)}</p>
-          </div>
-        )}
-      </div>
+        </div>
 
-      {/* Tabs */}
-      <div className="flex-none px-5 pb-3">
-        <div className="flex bg-slate-800/60 rounded-full p-1 gap-1">
-          {([
-            { id: 'pyramide' as Tab, label: 'Pyramide' },
-            { id: 'rates' as Tab, label: 'Mots ratés', n: missed.length },
-          ]).map(t => (
+        {/* Tab Bar */}
+        <div
+          style={{
+            display: "flex",
+            background: "rgba(30,41,59,0.9)",
+            borderRadius: "1rem",
+            padding: "0.375rem",
+            gap: "0.375rem",
+          }}
+        >
+          {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => { setTab(t.id); setDiscoveryWord(null) }}
-              className={`flex-1 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
-              }`}
+              onClick={() => {
+                setTab(t.id);
+                setDiscoveryWord(null);
+              }}
+              style={{
+                flex: 1,
+                padding: "0.625rem 0",
+                borderRadius: "0.75rem",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                border:
+                  tab === t.id
+                    ? "1px solid rgba(255,255,255,0.1)"
+                    : "1px solid transparent",
+                background:
+                  tab === t.id ? "rgba(255,255,255,0.08)" : "transparent",
+                color: tab === t.id ? "white" : "#475569",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
             >
               {t.label}
-              {t.n !== undefined && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                  tab === t.id ? 'bg-slate-100 text-slate-600' : 'bg-slate-700 text-slate-500'
-                }`}>{t.n}</span>
-              )}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {tab === 'pyramide' && (
-          <div className="flex flex-col items-center justify-center gap-2 px-4 py-6">
-            <p className="text-slate-600 text-[10px] font-semibold tracking-widest uppercase mb-2">La Pyramide</p>
-            <div className="flex justify-center">
-              <PyramidSlot len={8} word={pyramidFound[8]} />
-            </div>
-            <div className="flex gap-2 justify-center">
-              <PyramidSlot len={6} word={pyramidFound[6]} />
-              <PyramidSlot len={7} word={pyramidFound[7]} />
-            </div>
-            <div className="flex gap-2 justify-center">
-              <PyramidSlot len={3} word={pyramidFound[3]} />
-              <PyramidSlot len={4} word={pyramidFound[4]} />
-              <PyramidSlot len={5} word={pyramidFound[5]} />
-            </div>
-          </div>
-        )}
-
-        {tab === 'rates' && (
-          <div className="pb-4">
-            {missed.length === 0 && (
-              <p className="text-green-500 text-sm text-center py-12">🎉 Tu as tout trouvé !</p>
-            )}
-
-            {discoveryWord && (
-              <div className="mb-4 mx-5 p-4 rounded-3xl bg-slate-800/80 border border-violet-500/20 flex flex-col items-center gap-2">
-                <p className="text-violet-300 font-bold tracking-widest uppercase text-sm">{discoveryWord}</p>
-                {discoveryPath
-                  ? <Grid grid={grid} onWordSubmit={() => null} disabled discoveryPath={discoveryPath} />
-                  : <p className="text-slate-500 text-sm">Chemin non trouvé</p>
-                }
+        {/* Tab Content — scrollable */}
+        <div
+          style={
+            {
+              flex: 1,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+            } as React.CSSProperties
+          }
+        >
+          {/* Pyramide */}
+          {tab === "pyramide" && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.5rem",
+                paddingTop: "0.75rem",
+              }}
+            >
+              <PyramidSlotCard letters="8L+" word={pyramidFound[8]} />
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <PyramidSlotCard letters="6L" word={pyramidFound[6]} />
+                <PyramidSlotCard letters="7L" word={pyramidFound[7]} />
               </div>
-            )}
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <PyramidSlotCard letters="3L" word={pyramidFound[3]} />
+                <PyramidSlotCard letters="4L" word={pyramidFound[4]} />
+                <PyramidSlotCard letters="5L" word={pyramidFound[5]} />
+              </div>
+            </div>
+          )}
 
-            <div className="px-5">
-              {missed.map((w, i) => {
-                const s = scoreForWord(w)
-                const active = discoveryWord === w
+          {/* Classement */}
+          {tab === "classement" && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              {leaderboardLoading && (
+                <p
+                  style={{
+                    padding: "3rem 0",
+                    textAlign: "center",
+                    fontSize: "0.875rem",
+                    color: "#64748b",
+                  }}
+                >
+                  Chargement…
+                </p>
+              )}
+              {!leaderboardLoading && leaderboard.length === 0 && (
+                <p
+                  style={{
+                    padding: "3rem 0",
+                    textAlign: "center",
+                    fontSize: "0.875rem",
+                    color: "#64748b",
+                  }}
+                >
+                  Aucun résultat pour aujourd'hui
+                </p>
+              )}
+              {!leaderboardLoading &&
+                leaderboard.map((entry) => (
+                  <div
+                    key={entry.rank}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0.875rem 1rem",
+                      borderRadius: "1rem",
+                      background: entry.is_me
+                        ? "rgba(217,119,6,0.1)"
+                        : "rgba(30,41,59,0.8)",
+                      border: entry.is_me
+                        ? "1px solid rgba(217,119,6,0.3)"
+                        : "1px solid rgba(71,85,105,0.25)",
+                    }}
+                  >
+                    <span style={{ width: "2.5rem", fontSize: "1.1rem" }}>
+                      {RANK_MEDAL[entry.rank] ?? entry.rank}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        fontWeight: 500,
+                        color: entry.is_me ? "#fbbf24" : "white",
+                      }}
+                    >
+                      {entry.display_name ?? `Joueur #${entry.rank}`}
+                      {entry.is_me && (
+                        <span
+                          style={{
+                            marginLeft: "0.4rem",
+                            fontSize: "0.7rem",
+                            color: "rgba(251,191,36,0.5)",
+                          }}
+                        >
+                          · moi
+                        </span>
+                      )}
+                    </span>
+                    <div style={{ textAlign: "right" }}>
+                      <p
+                        style={{
+                          fontWeight: 600,
+                          color: entry.is_me ? "#fbbf24" : "white",
+                        }}
+                      >
+                        {entry.score} pts
+                      </p>
+                      <p style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {fmtTime(entry.elapsed_secs)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* Ratés */}
+          {tab === "rates" && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              {missed.length === 0 && (
+                <p
+                  style={{
+                    padding: "3rem 0",
+                    textAlign: "center",
+                    fontSize: "0.875rem",
+                    color: "#10b981",
+                  }}
+                >
+                  🎉 Tu as tout trouvé !
+                </p>
+              )}
+              {discoveryWord && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "1rem",
+                    borderRadius: "1.5rem",
+                    marginBottom: "0.25rem",
+                    background: "rgba(30,41,59,0.8)",
+                    border: "1px solid rgba(71,85,105,0.25)",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      color: "white",
+                    }}
+                  >
+                    {discoveryWord.toUpperCase()}
+                  </p>
+                  {discoveryPath ? (
+                    <Grid
+                      grid={grid}
+                      onWordSubmit={() => null}
+                      disabled
+                      discoveryPath={discoveryPath}
+                    />
+                  ) : (
+                    <p style={{ fontSize: "0.875rem", color: "#64748b" }}>
+                      Chemin non trouvé
+                    </p>
+                  )}
+                </div>
+              )}
+              {missed.map((w) => {
+                const s = scoreForWord(w);
+                const active = discoveryWord === w;
                 return (
                   <button
                     key={w}
-                    onClick={() => setDiscoveryWord(prev => prev === w ? null : w)}
-                    className={`flex items-center justify-between py-3 w-full text-left ${i > 0 ? 'border-t border-slate-800/80' : ''}`}
+                    onClick={() =>
+                      setDiscoveryWord((prev) => (prev === w ? null : w))
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "0.875rem 1rem",
+                      borderRadius: "1rem",
+                      background: active
+                        ? "rgba(59,130,246,0.1)"
+                        : "rgba(30,41,59,0.8)",
+                      border: active
+                        ? "1px solid rgba(59,130,246,0.3)"
+                        : "1px solid rgba(71,85,105,0.25)",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
                   >
-                    <span className={`font-semibold uppercase tracking-wide text-[15px] transition-colors ${active ? 'text-violet-300' : 'text-slate-400'}`}>
-                      {w}
+                    <span
+                      style={{
+                        fontWeight: 500,
+                        color: active ? "#93c5fd" : "white",
+                      }}
+                    >
+                      {w.toUpperCase()}
                     </span>
-                    <span className={`text-xs font-bold tabular-nums px-2 py-1 rounded-full ${SCORE_BG[s] ?? 'bg-slate-800'} ${active ? 'text-violet-300' : SCORE_COLOR[s] ?? 'text-slate-500'}`}>
-                      +{s} pts
+                    <span
+                      style={{
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "0.5rem",
+                        background: "rgba(71,85,105,0.3)",
+                        color: "#94a3b8",
+                      }}
+                    >
+                      +{s}
                     </span>
                   </button>
-                )
+                );
               })}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex-none px-6 pt-4 pb-7 border-t border-slate-800/80">
-        <div className="flex justify-around">
-          <button onClick={copySummary} className="flex flex-col items-center gap-1 active:opacity-60 transition-opacity">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg bg-blue-600 shadow-blue-600/30">
-              {copied ? '✓' : '📋'}
-            </div>
-            <span className="text-[10px] text-slate-500 font-medium mt-0.5">{copied ? 'Copié !' : 'Résumé'}</span>
-          </button>
-          <button onClick={onBack} className="flex flex-col items-center gap-1 active:opacity-60 transition-opacity">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl bg-slate-800">🏠</div>
-            <span className="text-[10px] text-slate-500 font-medium mt-0.5">Accueil</span>
-          </button>
+          )}
         </div>
       </div>
+      {/* end scrollable tab content */}
+
+      {/* Action Buttons — fixed at bottom */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.75rem",
+          padding: "1rem 0 2rem",
+          flexShrink: 0,
+        }}
+      >
+        <button
+          onClick={copySummary}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            padding: "1rem",
+            borderRadius: "1rem",
+            background: "rgba(30,41,59,0.9)",
+            border: "1px solid rgba(71,85,105,0.35)",
+            color: "white",
+            fontWeight: 500,
+            fontSize: "0.9rem",
+            cursor: "pointer",
+          }}
+        >
+          <Copy size={15} />
+          {copied ? "Copié !" : "Copier résumé"}
+        </button>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            padding: "1rem",
+            borderRadius: "1rem",
+            background: "#3b82f6",
+            border: "none",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "0.9rem",
+            cursor: "pointer",
+          }}
+        >
+          <Home size={15} />
+          Accueil
+        </button>
+      </div>
     </div>
-  )
+  );
 }

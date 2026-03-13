@@ -99,6 +99,57 @@ function generateRandomGrid(rand: () => number): Grid {
 }
 
 const MAX_ATTEMPTS = 200
+const MAX_ATTEMPTS_DAILY = 500
+
+const PYRAMID_REQUIRED = [3, 4, 5, 6, 7, 8] as const
+
+function hasPyramidCoverage(words: Set<string>): boolean {
+  for (const len of PYRAMID_REQUIRED) {
+    const has = len === 8
+      ? [...words].some(w => w.length >= 8)
+      : [...words].some(w => w.length === len)
+    if (!has) return false
+  }
+  return true
+}
+
+function pyramidCoverageScore(words: Set<string>): number {
+  let score = 0
+  for (const len of PYRAMID_REQUIRED) {
+    const has = len === 8
+      ? [...words].some(w => w.length >= 8)
+      : [...words].some(w => w.length === len)
+    if (has) score++
+  }
+  return score
+}
+
+export function generateDailyGrid(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> } {
+  const numericSeed = seedFromString(seed)
+  const rand = mulberry32(numericSeed)
+
+  let bestGrid: Grid | null = null
+  let bestWords: Set<string> = new Set()
+  let bestScore = -1
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS_DAILY; attempt++) {
+    const grid = generateRandomGrid(rand)
+    const words = findAllWords(grid, trie, 3)
+
+    if (hasPyramidCoverage(words)) {
+      return { grid, validWords: words }
+    }
+
+    const score = pyramidCoverageScore(words)
+    if (score > bestScore) {
+      bestScore = score
+      bestGrid = grid
+      bestWords = words
+    }
+  }
+
+  return { grid: bestGrid ?? generateRandomGrid(rand), validWords: bestWords }
+}
 
 function minWordsForConfig(minLetters: number): number {
   if (minLetters <= 3) return 30

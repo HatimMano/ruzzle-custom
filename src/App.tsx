@@ -51,6 +51,8 @@ type GameState = "loading" | "ready" | "playing" | "finished";
 type FeedbackType = "valid" | "duplicate" | "invalid" | null;
 
 function getDailyDate(): string {
+  const param = new URLSearchParams(window.location.search).get("daily");
+  if (param) return param;
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
     2,

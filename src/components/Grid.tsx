@@ -180,8 +180,8 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
                 onMouseUp={() => handleCellUp(cell)}
                 onTouchStart={() => handleCellDown(cell)}
                 className={`
-                  relative w-[72px] h-[72px] flex items-center justify-center
-                  rounded-xl border-2 font-bold text-xl uppercase
+                  relative w-[78px] h-[78px] flex items-center justify-center
+                  rounded-xl border-2 font-bold text-2xl uppercase
                   transition-all duration-150 touch-none
                   ${disabled ? 'cursor-default' : 'cursor-pointer'}
                   ${inFeedback && feedback

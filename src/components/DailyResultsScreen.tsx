@@ -376,10 +376,11 @@ export default function DailyResultsScreen({
                         </span>
                       )}
                     </span>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.3rem", flexShrink: 0 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem", flexShrink: 0 }}>
                       <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>
                         {entry.score} pts
                       </p>
+                      <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
                       <div style={{ display: "flex", gap: "3px" }}>
                         {[3,4,5,6,7,8].map(l => (
                           <div

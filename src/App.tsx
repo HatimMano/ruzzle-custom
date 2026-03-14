@@ -558,6 +558,11 @@ export default function App() {
   );
 
   const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+  function fmtTime(secs: number) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
+  }
 
   const LeaderboardDrawer = () => (
     <div
@@ -600,8 +605,9 @@ export default function App() {
                 {entry.display_name ?? `Joueur #${entry.rank}`}
                 {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
               </span>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.3rem", flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem", flexShrink: 0 }}>
                 <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>{entry.score} pts</p>
+                <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
                 <div style={{ display: "flex", gap: "3px" }}>
                   {[3,4,5,6,7,8].map(l => (
                     <div
@@ -829,7 +835,7 @@ export default function App() {
                     border: "none",
                     borderTop: "1px solid rgba(217,119,6,0.3)",
                     color: "white",
-                    fontSize: "1rem",
+                    fontSize: "1.05rem",
                     fontWeight: 700,
                     cursor: "pointer",
                   }}
@@ -910,7 +916,7 @@ export default function App() {
                     border: "none",
                     borderTop: "1px solid rgba(59,130,246,0.3)",
                     color: "white",
-                    fontSize: "1rem",
+                    fontSize: "1.05rem",
                     fontWeight: 700,
                     cursor: "pointer",
                   }}

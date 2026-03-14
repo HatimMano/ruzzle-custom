@@ -49,8 +49,9 @@ const lines = tsv.split('\n')
 const header = lines[0].split('\t')
 const idxOrtho = header.indexOf('ortho')
 const idxCgram = header.indexOf('cgram')
+const idxLemme = header.indexOf('lemme')
 
-if (idxOrtho === -1 || idxCgram === -1) {
+if (idxOrtho === -1 || idxCgram === -1 || idxLemme === -1) {
   console.error('Colonnes non trouvées. Header:', header.slice(0, 10))
   process.exit(1)
 }
@@ -58,6 +59,8 @@ if (idxOrtho === -1 || idxCgram === -1) {
 console.log(`Lignes brutes : ${lines.length}`)
 
 const words = new Set()
+// Lemmes des verbes en -er pour générer les participés passés féminins
+const erVerbStems = new Set()
 
 for (let i = 1; i < lines.length; i++) {
   const cols = lines[i].split('\t')
@@ -65,6 +68,7 @@ for (let i = 1; i < lines.length; i++) {
 
   const ortho = cols[idxOrtho]?.trim()
   const cgram = cols[idxCgram]?.trim()
+  const lemme = cols[idxLemme]?.trim()
 
   if (!ortho) continue
 
@@ -77,7 +81,33 @@ for (let i = 1; i < lines.length; i++) {
   if (VALID_CHARS.test(normalized)) {
     words.add(normalized)
   }
+
+  // Collecter les stems des verbes en -er (réguliers) pour expansion
+  // On cible VER et AUX uniquement, et seulement les infinitifs en -er
+  if ((cgram === 'VER' || cgram === 'AUX') && lemme) {
+    const lemmeNorm = removeAccents(lemme).toLowerCase()
+    // Verbes en -er seulement (pas -ir, -re, -oir qui sont irréguliers au féminin)
+    if (lemmeNorm.endsWith('er') && /^[a-z]+$/.test(lemmeNorm)) {
+      erVerbStems.add(lemmeNorm.slice(0, -2)) // stem = infinitif sans -er
+    }
+  }
 }
+
+// Générer les participes passés féminins des verbes en -er
+// Ex: donner → stem=donn → donnee (donnée), donnees (données)
+// Ces formes sont grammaticalement correctes à 100% pour tous les verbes réguliers en -er
+let added = 0
+for (const stem of erVerbStems) {
+  for (const suffix of ['ee', 'ees']) {
+    const form = stem + suffix
+    if (VALID_CHARS.test(form) && !words.has(form)) {
+      words.add(form)
+      added++
+    }
+  }
+}
+
+console.log(`Participes passés féminins ajoutés : ${added}`)
 
 const sorted = [...words].sort()
 await writeFile(OUT, sorted.join('\n'), 'utf8')

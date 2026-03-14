@@ -60,13 +60,14 @@ export interface LeaderboardEntry {
   score: number
   completed: boolean
   is_me: boolean
+  pyramid_found: Record<string, string> | null
 }
 
 export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEntry[]> {
   const myId = await getUserId()
   const { data, error } = await supabase
     .from('daily_results')
-    .select('user_id, elapsed_secs, levels_found, score, completed, profiles(display_name)')
+    .select('user_id, elapsed_secs, levels_found, score, completed, pyramid_found, profiles(display_name)')
     .eq('date', date)
     .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
@@ -80,6 +81,7 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
     score: row.score,
     completed: row.completed,
     is_me: row.user_id === myId,
+    pyramid_found: row.pyramid_found as Record<string, string> | null,
   }))
 }
 
@@ -95,8 +97,10 @@ export interface GameResultPayload {
 
 export async function submitGameResult(payload: GameResultPayload): Promise<void> {
   const userId = await ensureAuth()
+  const display_name = localStorage.getItem('griddle:display_name') ?? null
   const { error } = await supabase.from('game_results').insert({
     user_id: userId,
+    display_name,
     seed: payload.seed,
     score: payload.score,
     found_words: payload.foundWords,

@@ -346,9 +346,10 @@ export default function DailyResultsScreen({
                       border: entry.is_me
                         ? "1px solid rgba(217,119,6,0.3)"
                         : "1px solid rgba(71,85,105,0.25)",
+                      gap: "0.5rem",
                     }}
                   >
-                    <span style={{ width: "2.5rem", fontSize: "1.1rem" }}>
+                    <span style={{ width: "2rem", fontSize: "1.1rem", flexShrink: 0 }}>
                       {RANK_MEDAL[entry.rank] ?? entry.rank}
                     </span>
                     <span
@@ -356,6 +357,10 @@ export default function DailyResultsScreen({
                         flex: 1,
                         fontWeight: 500,
                         color: entry.is_me ? "#fbbf24" : "white",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
                     >
                       {entry.display_name ?? `Joueur #${entry.rank}`}
@@ -371,18 +376,23 @@ export default function DailyResultsScreen({
                         </span>
                       )}
                     </span>
-                    <div style={{ textAlign: "right" }}>
-                      <p
-                        style={{
-                          fontWeight: 600,
-                          color: entry.is_me ? "#fbbf24" : "white",
-                        }}
-                      >
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.3rem", flexShrink: 0 }}>
+                      <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>
                         {entry.score} pts
                       </p>
-                      <p style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                        {fmtTime(entry.elapsed_secs)}
-                      </p>
+                      <div style={{ display: "flex", gap: "3px" }}>
+                        {[3,4,5,6,7,8].map(l => (
+                          <div
+                            key={l}
+                            style={{
+                              width: "13px",
+                              height: "13px",
+                              borderRadius: "3px",
+                              background: entry.pyramid_found?.[l] ? "rgba(16,185,129,0.75)" : "rgba(71,85,105,0.3)",
+                            }}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))}

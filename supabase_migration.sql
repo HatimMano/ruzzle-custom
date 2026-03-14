@@ -23,6 +23,7 @@ create table if not exists daily_results (
 create table if not exists game_results (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references profiles(id) on delete cascade,
+  display_name  text,
   seed          text not null,
   score         int not null,
   found_words   text[] not null default '{}',
@@ -30,6 +31,9 @@ create table if not exists game_results (
   duration_secs int not null,
   created_at    timestamptz default now()
 );
+
+-- Migration : ajouter display_name si la table existe déjà
+alter table game_results add column if not exists display_name text;
 
 -- ─── Challenges (future 1v1 async) ───────────────────────────────────────────
 create table if not exists challenges (

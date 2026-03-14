@@ -381,17 +381,25 @@ export default function App() {
 
       const pts = scoreForWord(word);
 
-      // En mode défi, un mot ne compte que si son niveau pyramide n'est pas encore rempli
       const dailyLevelKey = isDailyChallengeRef.current ? Math.min(word.length, 8) : null;
       const levelAlreadyFilled = dailyLevelKey !== null && !!pyramidFoundRef.current[dailyLevelKey];
 
-      const newStreak = levelAlreadyFilled ? streak : streak + 1;
-      const bonus = levelAlreadyFilled ? 0 : streakBonus(newStreak);
-      const total = levelAlreadyFilled ? 0 : pts + bonus;
+      let bonus = 0;
+      let newStreak = streak;
+      let total: number;
+
+      if (isDailyChallengeRef.current) {
+        // Défi du jour : pas de bonus de série, points seulement si niveau pyramide nouveau
+        total = levelAlreadyFilled ? 0 : pts;
+      } else {
+        newStreak = streak + 1;
+        bonus = streakBonus(newStreak);
+        total = pts + bonus;
+        setStreak(newStreak);
+      }
 
       setFoundWords((prev) => [...prev, word]);
       if (total > 0) setScore((prev) => prev + total);
-      if (!levelAlreadyFilled) setStreak(newStreak);
 
       // Daily challenge: track pyramid levels
       if (dailyLevelKey !== null && !pyramidFoundRef.current[dailyLevelKey]) {
@@ -550,11 +558,6 @@ export default function App() {
   );
 
   const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
-  function fmtTime(secs: number) {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
-  }
 
   const LeaderboardDrawer = () => (
     <div
@@ -587,18 +590,31 @@ export default function App() {
                 borderRadius: "0.875rem",
                 background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)",
                 border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)",
+                gap: "0.5rem",
               }}
             >
-              <span style={{ width: "2.5rem", fontSize: "1.1rem" }}>
+              <span style={{ width: "2rem", fontSize: "1.1rem", flexShrink: 0 }}>
                 {RANK_MEDAL[entry.rank] ?? entry.rank}
               </span>
-              <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white" }}>
+              <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {entry.display_name ?? `Joueur #${entry.rank}`}
                 {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
               </span>
-              <div style={{ textAlign: "right" }}>
-                <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white" }}>{entry.score} pts</p>
-                <p style={{ fontSize: "0.75rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.3rem", flexShrink: 0 }}>
+                <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>{entry.score} pts</p>
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {[3,4,5,6,7,8].map(l => (
+                    <div
+                      key={l}
+                      style={{
+                        width: "13px",
+                        height: "13px",
+                        borderRadius: "3px",
+                        background: entry.pyramid_found?.[l] ? "rgba(16,185,129,0.75)" : "rgba(71,85,105,0.3)",
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           ))}

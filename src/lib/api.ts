@@ -7,7 +7,10 @@ export async function ensureAuth(): Promise<string> {
   if (session?.user) return session.user.id
   const { data, error } = await supabase.auth.signInAnonymously()
   if (error) throw error
-  return data.user!.id
+  const userId = data.user!.id
+  // Crée le profil si inexistant (remplace le trigger on_auth_user_created)
+  await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id' })
+  return userId
 }
 
 export async function getUserId(): Promise<string | null> {

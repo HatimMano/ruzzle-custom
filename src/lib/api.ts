@@ -4,11 +4,15 @@ import { supabase } from './supabase'
 
 export async function ensureAuth(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession()
-  if (session?.user) return session.user.id
-  const { data, error } = await supabase.auth.signInAnonymously()
-  if (error) throw error
-  const userId = data.user!.id
-  // Crée le profil si inexistant (remplace le trigger on_auth_user_created)
+  let userId: string
+  if (session?.user) {
+    userId = session.user.id
+  } else {
+    const { data, error } = await supabase.auth.signInAnonymously()
+    if (error) throw error
+    userId = data.user!.id
+  }
+  // Toujours s'assurer que le profil existe (résiste au drop/recreate de la table)
   await supabase.from('profiles').upsert({ id: userId }, { onConflict: 'id' })
   return userId
 }

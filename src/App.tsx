@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, History, Zap, Play, RefreshCw } from "lucide-react";
+import { User, History, Play, RefreshCw, Trophy } from "lucide-react";
 import Grid from "./components/Grid";
 import Timer from "./components/Timer";
 import ResultsScreen from "./components/ResultsScreen";
@@ -25,7 +25,9 @@ import {
   submitDailyResult,
   submitGameResult,
   setDisplayName,
+  fetchDailyLeaderboard,
 } from "./lib/api";
+import type { LeaderboardEntry } from "./lib/api";
 
 interface GameConfig {
   minLetters: 3 | 4 | 5 | 6 | 7;
@@ -138,6 +140,11 @@ export default function App() {
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
   const [pyramidFound, setPyramidFound] = useState<Record<number, string>>({});
   const [elapsed, setElapsed] = useState(0);
+
+  // Leaderboard drawer
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   const seedRef = useRef<string>("");
   const streakTimer = useRef<number>(0);
@@ -542,6 +549,64 @@ export default function App() {
     </div>
   );
 
+  const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+  function fmtTime(secs: number) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
+  }
+
+  const LeaderboardDrawer = () => (
+    <div
+      className="absolute inset-0 bg-slate-900/80 z-10 flex items-end"
+      onClick={() => setShowLeaderboard(false)}
+    >
+      <div
+        className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[75vh] flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
+        <div className="flex items-center gap-2">
+          <Trophy size={16} style={{ color: "#fbbf24" }} />
+          <span className="font-bold text-white text-base">Classement du jour</span>
+        </div>
+        <div className="overflow-y-auto flex flex-col gap-2">
+          {leaderboardLoading && (
+            <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>
+          )}
+          {!leaderboardLoading && leaderboard.length === 0 && (
+            <p className="text-slate-600 text-sm text-center py-6">Aucun résultat pour aujourd'hui</p>
+          )}
+          {!leaderboardLoading && leaderboard.map((entry) => (
+            <div
+              key={entry.rank}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "0.75rem 1rem",
+                borderRadius: "0.875rem",
+                background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)",
+                border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)",
+              }}
+            >
+              <span style={{ width: "2.5rem", fontSize: "1.1rem" }}>
+                {RANK_MEDAL[entry.rank] ?? entry.rank}
+              </span>
+              <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white" }}>
+                {entry.display_name ?? `Joueur #${entry.rank}`}
+                {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
+              </span>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white" }}>{entry.score} pts</p>
+                <p style={{ fontSize: "0.75rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   // === READY ===
   if (gameState === "ready") {
     const durations = ["30s", "1min", "2min", "∞"];
@@ -631,6 +696,31 @@ export default function App() {
                 </span>
               </button>
               <button
+                onClick={() => {
+                  setShowLeaderboard((v) => !v);
+                  if (!showLeaderboard && leaderboard.length === 0) {
+                    setLeaderboardLoading(true);
+                    fetchDailyLeaderboard(getDailyDate())
+                      .then(setLeaderboard)
+                      .finally(() => setLeaderboardLoading(false));
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "2.6rem",
+                  height: "2.6rem",
+                  borderRadius: "0.875rem",
+                  background: "rgba(30,41,59,0.9)",
+                  border: "1px solid rgba(71,85,105,0.5)",
+                  color: "#fbbf24",
+                  cursor: "pointer",
+                }}
+              >
+                <Trophy size={17} />
+              </button>
+              <button
                 onClick={() => setShowHistory((h) => !h)}
                 style={{
                   display: "flex",
@@ -682,12 +772,13 @@ export default function App() {
                   gap: "1rem",
                   width: "100%",
                   textAlign: "left",
-                  padding: "1.1rem 1.25rem",
+                  padding: "1.25rem 1.25rem",
                   borderRadius: "1.25rem",
                   background:
-                    "linear-gradient(135deg, rgba(217,119,6,0.22) 0%, rgba(234,179,8,0.08) 100%)",
-                  border: "1px solid rgba(217,119,6,0.3)",
+                    "linear-gradient(135deg, rgba(217,119,6,0.35) 0%, rgba(234,179,8,0.15) 100%)",
+                  border: "1px solid rgba(217,119,6,0.5)",
                   cursor: "pointer",
+                  boxShadow: "0 0 24px rgba(217,119,6,0.15)",
                 }}
               >
                 <div
@@ -698,17 +789,18 @@ export default function App() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: "0.875rem",
-                    background: "rgba(217,119,6,0.3)",
+                    borderRadius: "999px",
+                    background: "rgba(217,119,6,0.5)",
+                    boxShadow: "0 0 16px rgba(251,191,36,0.3)",
                   }}
                 >
-                  <Zap size={24} style={{ color: "#fbbf24" }} fill="#fbbf24" />
+                  <Play size={22} fill="#fbbf24" style={{ color: "#fbbf24", marginLeft: "2px" }} />
                 </div>
                 <div>
                   <p
                     style={{
-                      fontSize: "1.05rem",
-                      fontWeight: 700,
+                      fontSize: "1.1rem",
+                      fontWeight: 800,
                       color: "white",
                       marginBottom: "0.2rem",
                     }}
@@ -718,7 +810,7 @@ export default function App() {
                   <p
                     style={{
                       fontSize: "0.85rem",
-                      color: "rgba(251,191,36,0.65)",
+                      color: "rgba(251,191,36,0.7)",
                     }}
                   >
                     Complète la pyramide
@@ -898,6 +990,7 @@ export default function App() {
           )}
 
           {showHistory && <HistoryDrawer />}
+          {showLeaderboard && <LeaderboardDrawer />}
         </div>
 
         <PseudoModal

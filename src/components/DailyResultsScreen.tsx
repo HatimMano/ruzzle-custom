@@ -389,7 +389,9 @@ export default function DailyResultsScreen({
                               width: "13px",
                               height: "13px",
                               borderRadius: "3px",
-                              background: entry.pyramid_found?.[l] ? "rgba(16,185,129,0.75)" : "rgba(71,85,105,0.3)",
+                              background: entry.pyramid_found?.[l]
+                                ? l === 8 ? "rgba(251,191,36,0.85)" : "rgba(16,185,129,0.75)"
+                                : "rgba(71,85,105,0.3)",
                             }}
                           />
                         ))}

@@ -13,6 +13,7 @@ create table if not exists daily_results (
   elapsed_secs  int,
   completed     bool not null default false,
   levels_found  int not null default 0,
+  score         int not null default 0,
   found_words   text[] not null default '{}',
   pyramid_found jsonb not null default '{}',
   created_at    timestamptz default now(),

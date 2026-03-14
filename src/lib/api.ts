@@ -85,6 +85,40 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
   }))
 }
 
+// ─── Player stats ─────────────────────────────────────────────────────────────
+
+export interface PlayerStats {
+  games_played: number
+  total_score: number
+  total_words_found: number
+  total_letters_found: number
+  words_by_length: Record<string, number>
+  longest_word: string | null
+  daily_played: number
+  daily_completed: number
+  daily_streak: number
+  best_daily_streak: number
+  best_daily_score: number
+  fastest_complete_secs: number | null
+  total_pyramid_levels: number
+  free_games_played: number
+  best_free_score: number
+  challenges_played: number
+  challenges_won: number
+}
+
+export async function fetchMyStats(): Promise<PlayerStats | null> {
+  const myId = await getUserId()
+  if (!myId) return null
+  const { data, error } = await supabase
+    .from('player_stats')
+    .select('*')
+    .eq('user_id', myId)
+    .single()
+  if (error) { console.error('fetchMyStats:', error); return null }
+  return data as PlayerStats
+}
+
 // ─── Normal game results ──────────────────────────────────────────────────────
 
 export interface GameResultPayload {

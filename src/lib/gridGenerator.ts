@@ -98,8 +98,8 @@ function generateRandomGrid(rand: () => number): Grid {
   )
 }
 
-const MAX_ATTEMPTS = 200
-const MAX_ATTEMPTS_DAILY = 500
+const MAX_ATTEMPTS = 500
+const MAX_ATTEMPTS_DAILY = 800
 
 const PYRAMID_REQUIRED = [3, 4, 5, 6, 7, 8] as const
 
@@ -152,11 +152,11 @@ export function generateDailyGrid(seed: string, trie: Trie): { grid: Grid; valid
 }
 
 function minWordsForConfig(minLetters: number): number {
-  if (minLetters <= 3) return 30
-  if (minLetters === 4) return 20
-  if (minLetters === 5) return 15
-  if (minLetters === 6) return 8
-  return 4
+  if (minLetters <= 3) return 120
+  if (minLetters === 4) return 100
+  if (minLetters === 5) return 70
+  if (minLetters === 6) return 30
+  return 12
 }
 
 export function generateGrid(seed: string, trie: Trie, minLetters = 5): { grid: Grid; validWords: Set<string> } {

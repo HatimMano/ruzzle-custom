@@ -373,24 +373,28 @@ export default function App() {
       }
 
       const pts = scoreForWord(word);
-      const newStreak = streak + 1;
-      const bonus = streakBonus(newStreak);
-      const total = pts + bonus;
+
+      // En mode défi, un mot ne compte que si son niveau pyramide n'est pas encore rempli
+      const dailyLevelKey = isDailyChallengeRef.current ? Math.min(word.length, 8) : null;
+      const levelAlreadyFilled = dailyLevelKey !== null && !!pyramidFoundRef.current[dailyLevelKey];
+
+      const newStreak = levelAlreadyFilled ? streak : streak + 1;
+      const bonus = levelAlreadyFilled ? 0 : streakBonus(newStreak);
+      const total = levelAlreadyFilled ? 0 : pts + bonus;
 
       setFoundWords((prev) => [...prev, word]);
-      setScore((prev) => prev + total);
-      setStreak(newStreak);
-
-      clearTimeout(scoreAnimTimer.current);
-      setScoreAnim({ pts: total, id: Date.now() });
-      scoreAnimTimer.current = window.setTimeout(() => setScoreAnim(null), 700);
+      if (total > 0) setScore((prev) => prev + total);
+      if (!levelAlreadyFilled) setStreak(newStreak);
 
       // Daily challenge: track pyramid levels
-      if (isDailyChallengeRef.current) {
-        const key = Math.min(word.length, 8);
-        if (!pyramidFoundRef.current[key]) {
-          setPyramidFound((prev) => ({ ...prev, [key]: word }));
-        }
+      if (dailyLevelKey !== null && !pyramidFoundRef.current[dailyLevelKey]) {
+        setPyramidFound((prev) => ({ ...prev, [dailyLevelKey]: word }));
+      }
+
+      if (total > 0) {
+        clearTimeout(scoreAnimTimer.current);
+        setScoreAnim({ pts: total, id: Date.now() });
+        scoreAnimTimer.current = window.setTimeout(() => setScoreAnim(null), 700);
       }
 
       if (bonus > 0) {

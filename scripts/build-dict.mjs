@@ -20,7 +20,6 @@ const OUT = path.join(__dirname, '..', 'public', 'words_fr.txt')
 // Lexique383 TSV — colonnes : ortho, phon, lemme, cgram, genre, nombre, freqfilms2, freqlivres, ...
 const URL = 'http://www.lexique.org/databases/Lexique383/Lexique383.tsv'
 
-const VALID_POS = new Set(['NOM', 'ADJ', 'VER', 'ADV'])
 const VALID_CHARS = /^[a-z]{3,10}$/
 
 async function fetchText(url) {
@@ -67,8 +66,10 @@ for (let i = 1; i < lines.length; i++) {
   const ortho = cols[idxOrtho]?.trim()
   const cgram = cols[idxCgram]?.trim()
 
-  if (!ortho || !cgram) continue
-  if (!VALID_POS.has(cgram)) continue
+  if (!ortho) continue
+
+  // Exclure les noms propres (commencent par une majuscule dans Lexique383)
+  if (ortho[0] === ortho[0].toUpperCase() && ortho[0] !== ortho[0].toLowerCase()) continue
 
   // Normaliser : supprimer accents, mettre en minuscules
   const normalized = removeAccents(ortho).toLowerCase()

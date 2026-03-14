@@ -762,231 +762,149 @@ export default function App() {
               </span>
             </div>
           ) : (
-            <>
-              {/* Daily Challenge Card */}
-              <button
-                onClick={startDailyChallenge}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
+
+              {/* Carte Défi du jour */}
+              <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "1rem",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "1.25rem 1.25rem",
-                  borderRadius: "1.25rem",
-                  background:
-                    "linear-gradient(135deg, rgba(217,119,6,0.35) 0%, rgba(234,179,8,0.15) 100%)",
-                  border: "1px solid rgba(217,119,6,0.5)",
-                  cursor: "pointer",
-                  boxShadow: "0 0 24px rgba(217,119,6,0.15)",
+                  borderRadius: "1.5rem",
+                  background: "linear-gradient(135deg, rgba(217,119,6,0.3) 0%, rgba(234,179,8,0.1) 100%)",
+                  border: "1px solid rgba(217,119,6,0.45)",
+                  boxShadow: "0 0 28px rgba(217,119,6,0.12)",
+                  overflow: "hidden",
                 }}
               >
-                <div
+                <div style={{ padding: "1.25rem 1.25rem 1rem" }}>
+                  <p style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "rgba(251,191,36,0.6)", textTransform: "uppercase", marginBottom: "0.3rem" }}>
+                    Défi du jour · {getDailyDate()}
+                  </p>
+                  <p style={{ fontSize: "1.2rem", fontWeight: 800, color: "white", marginBottom: "1rem" }}>
+                    Complète la pyramide
+                  </p>
+                  {/* Mini pyramide */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {(["8L+"] as const).map((l) => (
+                        <div key={l} style={{ padding: "0.3rem 0.9rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {(["6L", "7L"] as const).map((l) => (
+                        <div key={l} style={{ padding: "0.3rem 0.75rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {(["3L", "4L", "5L"] as const).map((l) => (
+                        <div key={l} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={startDailyChallenge}
                   style={{
-                    width: "3.5rem",
-                    height: "3.5rem",
-                    flexShrink: 0,
+                    width: "100%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    borderRadius: "999px",
+                    gap: "0.5rem",
+                    padding: "0.9rem",
                     background: "rgba(217,119,6,0.5)",
-                    boxShadow: "0 0 16px rgba(251,191,36,0.3)",
+                    border: "none",
+                    borderTop: "1px solid rgba(217,119,6,0.3)",
+                    color: "white",
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
                   }}
                 >
-                  <Play size={22} fill="#fbbf24" style={{ color: "#fbbf24", marginLeft: "2px" }} />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: "1.1rem",
-                      fontWeight: 800,
-                      color: "white",
-                      marginBottom: "0.2rem",
-                    }}
-                  >
-                    Défi du jour
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "0.85rem",
-                      color: "rgba(251,191,36,0.7)",
-                    }}
-                  >
-                    Complète la pyramide
-                  </p>
-                </div>
-              </button>
-
-              {/* Config Card */}
-              <div
-                style={{
-                  padding: "1.25rem",
-                  borderRadius: "1.25rem",
-                  background: "rgba(30,41,59,0.8)",
-                  border: "1px solid rgba(71,85,105,0.35)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1.1rem",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.65rem",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    Durée
-                  </p>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    {durations.map((duration) => (
-                      <button
-                        key={duration}
-                        onClick={() =>
-                          setConfig((prev) => ({
-                            ...prev,
-                            duration: durationMap[duration],
-                          }))
-                        }
-                        style={{
-                          flex: 1,
-                          padding: "0.6rem 0",
-                          borderRadius: "0.75rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                          background:
-                            selectedDuration === duration
-                              ? "white"
-                              : "rgba(15,23,42,0.7)",
-                          color:
-                            selectedDuration === duration
-                              ? "#0f172a"
-                              : "#64748b",
-                          border:
-                            selectedDuration === duration
-                              ? "none"
-                              : "1px solid rgba(71,85,105,0.3)",
-                        }}
-                      >
-                        {duration}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.65rem",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#64748b",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    Lettres min
-                  </p>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    {minLetters.map((letters) => (
-                      <button
-                        key={letters}
-                        onClick={() =>
-                          setConfig((prev) => ({
-                            ...prev,
-                            minLetters: letters as GameConfig["minLetters"],
-                          }))
-                        }
-                        style={{
-                          flex: 1,
-                          padding: "0.6rem 0",
-                          borderRadius: "0.75rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                          background:
-                            config.minLetters === letters
-                              ? "white"
-                              : "rgba(15,23,42,0.7)",
-                          color:
-                            config.minLetters === letters
-                              ? "#0f172a"
-                              : "#64748b",
-                          border:
-                            config.minLetters === letters
-                              ? "none"
-                              : "1px solid rgba(71,85,105,0.3)",
-                        }}
-                      >
-                        {letters}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                  <Play size={16} fill="white" style={{ color: "white" }} />
+                  Jouer
+                </button>
               </div>
 
-              {/* Start Button */}
+              {/* Carte Partie libre */}
               <div
                 style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.875rem",
-                  paddingBottom: "2rem",
+                  borderRadius: "1.5rem",
+                  background: "rgba(30,41,59,0.8)",
+                  border: "1px solid rgba(71,85,105,0.35)",
+                  overflow: "hidden",
                 }}
               >
+                <div style={{ padding: "1.25rem 1.25rem 1rem" }}>
+                  <p style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "#475569", textTransform: "uppercase", marginBottom: "0.3rem" }}>
+                    Partie libre
+                  </p>
+                  <p style={{ fontSize: "1.2rem", fontWeight: 800, color: "white", marginBottom: "1rem" }}>
+                    Joue à ton rythme
+                  </p>
+
+                  {/* Durée */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.875rem" }}>
+                    <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>Durée</p>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {durations.map((duration) => (
+                        <button
+                          key={duration}
+                          onClick={() => setConfig((prev) => ({ ...prev, duration: durationMap[duration] }))}
+                          style={{
+                            flex: 1, padding: "0.55rem 0", borderRadius: "0.75rem",
+                            fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                            background: selectedDuration === duration ? "white" : "rgba(15,23,42,0.7)",
+                            color: selectedDuration === duration ? "#0f172a" : "#64748b",
+                            border: selectedDuration === duration ? "none" : "1px solid rgba(71,85,105,0.3)",
+                          }}
+                        >{duration}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Lettres min */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>Lettres min</p>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {minLetters.map((letters) => (
+                        <button
+                          key={letters}
+                          onClick={() => setConfig((prev) => ({ ...prev, minLetters: letters as GameConfig["minLetters"] }))}
+                          style={{
+                            flex: 1, padding: "0.55rem 0", borderRadius: "0.75rem",
+                            fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                            background: config.minLetters === letters ? "white" : "rgba(15,23,42,0.7)",
+                            color: config.minLetters === letters ? "#0f172a" : "#64748b",
+                            border: config.minLetters === letters ? "none" : "1px solid rgba(71,85,105,0.3)",
+                          }}
+                        >{letters}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={startGame}
                   style={{
-                    width: "5.5rem",
-                    height: "5.5rem",
-                    borderRadius: "999px",
-                    background: "#3b82f6",
-                    border: "none",
+                    width: "100%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: "0.5rem",
+                    padding: "0.9rem",
+                    background: "#3b82f6",
+                    border: "none",
+                    borderTop: "1px solid rgba(59,130,246,0.3)",
+                    color: "white",
+                    fontSize: "1rem",
+                    fontWeight: 700,
                     cursor: "pointer",
-                    boxShadow: "0 0 36px rgba(59,130,246,0.45)",
                   }}
                 >
-                  <Play
-                    size={30}
-                    fill="white"
-                    style={{ color: "white", marginLeft: "3px" }}
-                  />
+                  <Play size={16} fill="white" style={{ color: "white" }} />
+                  Jouer · {config.minLetters}L · {selectedDuration}
                 </button>
-                <p
-                  style={{
-                    fontSize: "0.875rem",
-                    color: "#475569",
-                    fontWeight: 500,
-                  }}
-                >
-                  Démarrer · {config.minLetters}L · {selectedDuration}
-                </p>
               </div>
-            </>
+
+            </div>
           )}
 
           {showHistory && <HistoryDrawer />}

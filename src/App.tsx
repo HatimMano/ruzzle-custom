@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { User, History, Play, RefreshCw, Trophy } from "lucide-react";
+import { User, History, Play, RefreshCw, Trophy, X } from "lucide-react";
+import { getDailyAbandonMessage, getFreeAbandonMessage } from "./lib/abandonMessages";
 import Grid from "./components/Grid";
 import Timer from "./components/Timer";
 import ResultsScreen from "./components/ResultsScreen";
@@ -325,6 +326,12 @@ export default function App() {
   const endGame = useCallback(() => {
     finishGame(scoreRef.current, foundWordsRef.current);
   }, [finishGame]);
+
+  const confirmAndStop = () => {
+    const msg = isDailyChallengeRef.current ? getDailyAbandonMessage() : getFreeAbandonMessage()
+    if (!confirm(msg)) return
+    stopGame()
+  }
 
   const stopGame = () => {
     clearInterval(elapsedIntervalRef.current);
@@ -799,11 +806,11 @@ export default function App() {
                 }}
               >
                 <div style={{ padding: "1.25rem 1.25rem 1rem" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "rgba(251,191,36,0.6)", textTransform: "uppercase", marginBottom: "0.3rem" }}>
-                    Défi du jour · {getDailyDate()}
+                  <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
+                    PYRAMIDDLE
                   </p>
-                  <p style={{ fontSize: "1.2rem", fontWeight: 800, color: "white", marginBottom: "1rem" }}>
-                    Complète la pyramide
+                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(251,191,36,0.7)", marginBottom: "1rem" }}>
+                    Défi du jour · complète la pyramide · {getDailyDate()}
                   </p>
                   {/* Mini pyramide */}
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
@@ -857,10 +864,10 @@ export default function App() {
                 }}
               >
                 <div style={{ padding: "1.25rem 1.25rem 1rem" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.1em", color: "#475569", textTransform: "uppercase", marginBottom: "0.3rem" }}>
-                    Partie libre
+                  <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
+                    PARTIE LIBRE
                   </p>
-                  <p style={{ fontSize: "1.2rem", fontWeight: 800, color: "white", marginBottom: "1rem" }}>
+                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(148,163,184,0.7)", marginBottom: "1rem" }}>
                     Joue à ton rythme
                   </p>
 
@@ -985,25 +992,46 @@ export default function App() {
             </span>
           )}
         </h1>
-        <button
-          onClick={newGame}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            padding: "0.5rem 0.875rem",
-            borderRadius: "0.75rem",
-            background: "rgba(30,41,59,0.9)",
-            border: "1px solid rgba(71,85,105,0.4)",
-            color: "#94a3b8",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          <RefreshCw size={13} />
-          Nouvelle
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button
+            onClick={confirmAndStop}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+              padding: "0.45rem 0.75rem",
+              borderRadius: "0.75rem",
+              background: "rgba(185,28,28,0.2)",
+              border: "1px solid rgba(185,28,28,0.35)",
+              color: "#fca5a5",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <X size={13} />
+            Quit
+          </button>
+          <button
+            onClick={newGame}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.3rem",
+              padding: "0.45rem 0.75rem",
+              borderRadius: "0.75rem",
+              background: "rgba(30,41,59,0.9)",
+              border: "1px solid rgba(71,85,105,0.4)",
+              color: "#94a3b8",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <RefreshCw size={13} />
+            New
+          </button>
+        </div>
       </div>
 
       {/* Score bar */}
@@ -1227,34 +1255,6 @@ export default function App() {
         ) : null}
       </div>
 
-      {/* Bouton terminer */}
-      <div style={{ padding: "0.5rem 1.25rem 2rem" }}>
-        <button
-          onClick={stopGame}
-          style={{
-            width: "100%",
-            padding: "1rem",
-            borderRadius: "1rem",
-            background: "rgba(30,41,59,0.7)",
-            border: "1px solid rgba(71,85,105,0.3)",
-            color: "#475569",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            transition: "all 0.15s",
-          }}
-          onTouchStart={(e) => {
-            e.currentTarget.style.background = "rgba(30,41,59,0.95)";
-            e.currentTarget.style.color = "#94a3b8";
-          }}
-          onTouchEnd={(e) => {
-            e.currentTarget.style.background = "rgba(30,41,59,0.7)";
-            e.currentTarget.style.color = "#475569";
-          }}
-        >
-          {isDailyChallenge ? "Abandonner la pyramide" : "Terminer la partie"}
-        </button>
-      </div>
 
       {showHistory && <HistoryDrawer />}
     </div>

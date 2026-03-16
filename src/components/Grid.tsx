@@ -77,7 +77,18 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
 
   const handleCellEnter = (cell: Cell) => {
     if (!isDragging.current || disabled) return
-    if (canSelect(cell)) setSelectedCells(prev => [...prev, cell])
+    setSelectedCells(prev => {
+      // Retour arrière : si la cellule est l'avant-dernière, on retire la dernière
+      if (prev.length >= 2 && cellKey(prev[prev.length - 2]) === cellKey(cell)) {
+        return prev.slice(0, -1)
+      }
+      const last = prev[prev.length - 1]
+      const adjacent = !last || (Math.abs(cell.row - last.row) <= 1 && Math.abs(cell.col - last.col) <= 1)
+      if (adjacent && !prev.some(s => cellKey(s) === cellKey(cell))) {
+        return [...prev, cell]
+      }
+      return prev
+    })
   }
 
   const handleCellUp = (cell: Cell) => {
@@ -135,7 +146,18 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
     e.preventDefault()
     const touch = e.touches[0]
     const cell = getCellFromTouch(touch)
-    if (cell && canSelect(cell)) setSelectedCells(prev => [...prev, cell])
+    if (!cell) return
+    setSelectedCells(prev => {
+      if (prev.length >= 2 && cellKey(prev[prev.length - 2]) === cellKey(cell)) {
+        return prev.slice(0, -1)
+      }
+      const last = prev[prev.length - 1]
+      const adjacent = !last || (Math.abs(cell.row - last.row) <= 1 && Math.abs(cell.col - last.col) <= 1)
+      if (adjacent && !prev.some(s => cellKey(s) === cellKey(cell))) {
+        return [...prev, cell]
+      }
+      return prev
+    })
   }
 
   const currentWord = selectedCells.map(c => c.letter.toUpperCase()).join('')
@@ -155,7 +177,7 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
 
       {/* Grille */}
       <div
-        className={`grid grid-cols-4 gap-3 p-3 bg-slate-800/50 rounded-2xl border border-slate-700 select-none ${disabled ? 'pointer-events-none' : ''}`}
+        className={`grid grid-cols-4 gap-3 p-1 select-none ${disabled ? 'pointer-events-none' : ''}`}
         onTouchMove={handleTouchMove}
       >
         {grid.map((row, r) =>

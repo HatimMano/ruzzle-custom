@@ -157,9 +157,9 @@ begin
     if length(w) > max_w_score then max_w_score := length(w); end if;
   end loop;
 
-  select w into new_longest
-  from unnest(new.found_words) w
-  order by length(w) desc, w limit 1;
+  select word into new_longest
+  from unnest(new.found_words) word
+  order by length(word) desc, word limit 1;
 
   -- Calcul de la série de jours consécutifs
   select
@@ -194,7 +194,7 @@ begin
     total_score           = total_score + new.score,
     total_words_found     = total_words_found + coalesce(array_length(new.found_words, 1), 0),
     total_letters_found   = total_letters_found + coalesce(
-      (select sum(length(w)) from unnest(new.found_words) w), 0
+      (select sum(length(word)) from unnest(new.found_words) word), 0
     ),
     longest_word          = case
       when longest_word is null or length(new_longest) > length(longest_word)
@@ -233,9 +233,9 @@ begin
     );
   end loop;
 
-  select w into new_longest
-  from unnest(new.found_words) w
-  order by length(w) desc, w limit 1;
+  select word into new_longest
+  from unnest(new.found_words) word
+  order by length(word) desc, word limit 1;
 
   update player_stats set
     games_played        = games_played + 1,
@@ -244,7 +244,7 @@ begin
     total_score         = total_score + new.score,
     total_words_found   = total_words_found + coalesce(array_length(new.found_words, 1), 0),
     total_letters_found = total_letters_found + coalesce(
-      (select sum(length(w)) from unnest(new.found_words) w), 0
+      (select sum(length(word)) from unnest(new.found_words) word), 0
     ),
     longest_word        = case
       when longest_word is null or length(new_longest) > length(longest_word)

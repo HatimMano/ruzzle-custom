@@ -45,6 +45,7 @@ export interface DailyResultPayload {
 
 export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {
   const userId = await ensureAuth()
+  console.log('[submitDailyResult] userId:', userId, 'payload:', payload)
   const { error } = await supabase.from('daily_results').insert({
     user_id: userId,
     date: payload.date,
@@ -55,8 +56,8 @@ export async function submitDailyResult(payload: DailyResultPayload): Promise<vo
     found_words: payload.foundWords,
     pyramid_found: payload.pyramidFound,
   })
-  // 23505 = unique violation → already submitted today, ignore silently
-  if (error && error.code !== '23505') console.error('submitDailyResult:', error)
+  if (error) console.error('[submitDailyResult] error:', error)
+  else console.log('[submitDailyResult] success')
 }
 
 export interface LeaderboardEntry {

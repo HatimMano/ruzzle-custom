@@ -19,7 +19,7 @@ interface Props {
   onCopyLink: () => void;
 }
 
-type Tab = "trouves" | "rates";
+type Tab = "trouves" | "tous";
 
 const SCORE_STYLE: Record<number, { color: string; bg: string }> = {
   1: { color: "#94a3b8", bg: "rgba(71,85,105,0.25)" },
@@ -43,7 +43,7 @@ export default function ResultsScreen({
   onNewGame,
   onCopyLink,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("trouves");
+  const [tab, setTab] = useState<Tab>("tous");
   const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<number>(0);
@@ -258,7 +258,7 @@ export default function ResultsScreen({
         >
           {[
             { id: "trouves" as Tab, label: "Trouvés", n: foundWords.length },
-            { id: "rates" as Tab, label: "Ratés", n: missed.length },
+            { id: "tous" as Tab, label: "Tous les mots", n: validWords.size },
           ].map((t) => (
             <button
               key={t.id}
@@ -370,17 +370,10 @@ export default function ResultsScreen({
           </div>
         )}
 
-        {tab === "rates" && (
+        {tab === "tous" && (
           <div style={{ paddingBottom: "1rem" }}>
             {missed.length === 0 && (
-              <p
-                style={{
-                  textAlign: "center",
-                  color: "#10b981",
-                  fontSize: "0.875rem",
-                  padding: "3rem 0",
-                }}
-              >
+              <p style={{ textAlign: "center", color: "#10b981", fontSize: "0.875rem", padding: "1rem 0 0.5rem" }}>
                 🎉 Tu as tout trouvé !
               </p>
             )}
@@ -399,83 +392,70 @@ export default function ResultsScreen({
                   border: "1px solid rgba(109,40,217,0.2)",
                 }}
               >
-                <p
-                  style={{
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    letterSpacing: "0.1em",
-                    color: "#c4b5fd",
-                  }}
-                >
+                <p style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em", color: "#c4b5fd" }}>
                   {discoveryWord.toUpperCase()}
                 </p>
                 {discoveryPath ? (
-                  <Grid
-                    grid={grid}
-                    onWordSubmit={() => null}
-                    disabled
-                    discoveryPath={discoveryPath}
-                  />
+                  <Grid grid={grid} onWordSubmit={() => null} disabled discoveryPath={discoveryPath} />
                 ) : (
-                  <p style={{ fontSize: "0.875rem", color: "#475569" }}>
-                    Chemin non trouvé
-                  </p>
+                  <p style={{ fontSize: "0.875rem", color: "#475569" }}>Chemin non trouvé</p>
                 )}
               </div>
             )}
 
-            {missed.map((w, i) => {
-              const s = scoreForWord(w);
-              const { color, bg } = scoreStyle(s);
-              const active = discoveryWord === w;
-              return (
-                <button
-                  key={w}
-                  onClick={() =>
-                    setDiscoveryWord((prev) => (prev === w ? null : w))
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.8rem 0",
-                    borderTop: i > 0 ? "1px solid rgba(30,41,59,0.8)" : "none",
-                    background: "transparent",
-                    border: "none",
-                    borderTopStyle: i > 0 ? "solid" : undefined,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span
+            {[...validWords]
+              .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b))
+              .map((w, i) => {
+                const s = scoreForWord(w);
+                const { color, bg } = scoreStyle(s);
+                const found = foundWords.includes(w);
+                const active = discoveryWord === w;
+                return (
+                  <button
+                    key={w}
+                    onClick={() => setDiscoveryWord((prev) => (prev === w ? null : w))}
                     style={{
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      fontSize: "0.95rem",
-                      color: active ? "#c4b5fd" : "#64748b",
-                      transition: "color 0.15s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "0.8rem 0",
+                      borderTop: i > 0 ? "1px solid rgba(30,41,59,0.8)" : "none",
+                      background: "transparent",
+                      border: "none",
+                      borderTopStyle: i > 0 ? "solid" : undefined,
+                      cursor: "pointer",
                     }}
                   >
-                    {w}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      fontVariantNumeric: "tabular-nums",
-                      padding: "0.2rem 0.55rem",
-                      borderRadius: "999px",
-                      background: active ? "rgba(109,40,217,0.2)" : bg,
-                      color: active ? "#c4b5fd" : color,
-                    }}
-                  >
-                    +{s} pts
-                  </span>
-                </button>
-              );
-            })}
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                        fontSize: "0.95rem",
+                        color: active ? "#c4b5fd" : found ? "white" : "#475569",
+                        transition: "color 0.15s",
+                      }}
+                    >
+                      {w}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        fontVariantNumeric: "tabular-nums",
+                        padding: "0.2rem 0.55rem",
+                        borderRadius: "999px",
+                        background: active ? "rgba(109,40,217,0.2)" : found ? bg : "rgba(30,41,59,0.6)",
+                        color: active ? "#c4b5fd" : found ? color : "#334155",
+                      }}
+                    >
+                      +{s} pts
+                    </span>
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>

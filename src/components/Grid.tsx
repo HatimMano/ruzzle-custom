@@ -23,7 +23,18 @@ const FEEDBACK_ANIM: Record<NonNullable<FeedbackType>, string> = {
   invalid: 'animate-shake',
 }
 
+// Tailles adaptées à la taille de grille (mobile-first, max-w 28rem ≈ 448px)
+const SIZE_LAYOUT: Record<number, { cell: number; gap: number; font: number }> = {
+  4: { cell: 78, gap: 12, font: 24 },
+  5: { cell: 64, gap: 10, font: 22 },
+  6: { cell: 54, gap: 8,  font: 20 },
+}
+const DEFAULT_LAYOUT = { cell: 78, gap: 12, font: 24 }
+
 export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minLetters = 5 }: GridProps) {
+  const size = grid.length
+  const { cell: cellPx, gap: gapPx, font: fontPx } = SIZE_LAYOUT[size] ?? DEFAULT_LAYOUT
+
   const [selectedCells, setSelectedCells] = useState<Cell[]>([])
   const [feedback, setFeedback] = useState<FeedbackType>(null)
   const [feedbackCells, setFeedbackCells] = useState<Set<string>>(new Set())
@@ -177,7 +188,11 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
 
       {/* Grille */}
       <div
-        className={`grid grid-cols-4 gap-3 p-1 select-none ${disabled ? 'pointer-events-none' : ''}`}
+        className={`grid p-1 select-none ${disabled ? 'pointer-events-none' : ''}`}
+        style={{
+          gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
+          gap: `${gapPx}px`,
+        }}
         onTouchMove={handleTouchMove}
       >
         {grid.map((row, r) =>
@@ -201,9 +216,10 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
                 onMouseEnter={() => handleCellEnter(cell)}
                 onMouseUp={() => handleCellUp(cell)}
                 onTouchStart={() => handleCellDown(cell)}
+                style={{ width: `${cellPx}px`, height: `${cellPx}px`, fontSize: `${fontPx}px` }}
                 className={`
-                  relative w-[78px] h-[78px] flex items-center justify-center
-                  rounded-xl border-2 font-bold text-2xl uppercase
+                  relative flex items-center justify-center
+                  rounded-xl border-2 font-bold uppercase
                   transition-all duration-150 touch-none
                   ${disabled ? 'cursor-default' : 'cursor-pointer'}
                   ${inFeedback && feedback

@@ -18,7 +18,7 @@ const CUM_WEIGHTS = WEIGHTS.reduce<number[]>((acc, w, i) => {
   return acc
 }, [])
 
-function weightedRandom(rand: () => number): string {
+export function weightedRandomLetter(rand: () => number): string {
   const r = rand() * TOTAL_WEIGHT
   const idx = CUM_WEIGHTS.findIndex(cw => cw >= r)
   return LETTERS[idx >= 0 ? idx : LETTERS.length - 1]
@@ -38,14 +38,18 @@ const DIRECTIONS = [
   [1, -1],  [1, 0],  [1, 1],
 ]
 
-function getNeighbors(row: number, col: number, size = 4): [number, number][] {
+function getNeighbors(row: number, col: number, size: number): [number, number][] {
   return DIRECTIONS
     .map(([dr, dc]) => [row + dr, col + dc] as [number, number])
     .filter(([r, c]) => r >= 0 && r < size && c >= 0 && c < size)
 }
 
-// DFS pour trouver tous les mots valides dans une grille
-function findAllWords(grid: Grid, trie: Trie, minLetters = 5): Set<string> {
+export function findAllWords(
+  grid: Grid,
+  trie: Trie,
+  minLetters: number,
+  maxLen: number
+): Set<string> {
   const found = new Set<string>()
   const size = grid.length
 
@@ -62,11 +66,8 @@ function findAllWords(grid: Grid, trie: Trie, minLetters = 5): Set<string> {
     const word = path + letter
     if (nextNode.isWord && word.length >= minLetters) found.add(word)
 
-    // Élagage : si aucun préfixe possible, on arrête
     if (nextNode.children.size === 0) return
-
-    // Limite profondeur à 10 (mots max 10 chars)
-    if (word.length >= 10) return
+    if (word.length >= maxLen) return
 
     visited[row][col] = true
     for (const [nr, nc] of getNeighbors(row, col, size)) {
@@ -88,10 +89,10 @@ function findAllWords(grid: Grid, trie: Trie, minLetters = 5): Set<string> {
   return found
 }
 
-function generateRandomGrid(rand: () => number): Grid {
-  return Array.from({ length: 4 }, (_, row) =>
-    Array.from({ length: 4 }, (_, col) => ({
-      letter: weightedRandom(rand),
+export function generateRandomGrid(rand: () => number, size: number): Grid {
+  return Array.from({ length: size }, (_, row) =>
+    Array.from({ length: size }, (_, col) => ({
+      letter: weightedRandomLetter(rand),
       row,
       col,
     }))
@@ -99,57 +100,6 @@ function generateRandomGrid(rand: () => number): Grid {
 }
 
 const MAX_ATTEMPTS = 500
-const MAX_ATTEMPTS_DAILY = 800
-
-const PYRAMID_REQUIRED = [3, 4, 5, 6, 7, 8] as const
-
-function hasPyramidCoverage(words: Set<string>): boolean {
-  for (const len of PYRAMID_REQUIRED) {
-    const has = len === 8
-      ? [...words].some(w => w.length >= 8)
-      : [...words].some(w => w.length === len)
-    if (!has) return false
-  }
-  return true
-}
-
-function pyramidCoverageScore(words: Set<string>): number {
-  let score = 0
-  for (const len of PYRAMID_REQUIRED) {
-    const has = len === 8
-      ? [...words].some(w => w.length >= 8)
-      : [...words].some(w => w.length === len)
-    if (has) score++
-  }
-  return score
-}
-
-export function generateDailyGrid(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> } {
-  const numericSeed = seedFromString(seed)
-  const rand = mulberry32(numericSeed)
-
-  let bestGrid: Grid | null = null
-  let bestWords: Set<string> = new Set()
-  let bestScore = -1
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS_DAILY; attempt++) {
-    const grid = generateRandomGrid(rand)
-    const words = findAllWords(grid, trie, 3)
-
-    if (hasPyramidCoverage(words)) {
-      return { grid, validWords: words }
-    }
-
-    const score = pyramidCoverageScore(words)
-    if (score > bestScore) {
-      bestScore = score
-      bestGrid = grid
-      bestWords = words
-    }
-  }
-
-  return { grid: bestGrid ?? generateRandomGrid(rand), validWords: bestWords }
-}
 
 function minWordsForConfig(minLetters: number): number {
   if (minLetters <= 3) return 120
@@ -159,7 +109,12 @@ function minWordsForConfig(minLetters: number): number {
   return 12
 }
 
-export function generateGrid(seed: string, trie: Trie, minLetters = 5): { grid: Grid; validWords: Set<string> } {
+// Partie libre : grille 4×4 avec un nombre minimum de mots ≥ minLetters
+export function generateGrid(
+  seed: string,
+  trie: Trie,
+  minLetters = 5
+): { grid: Grid; validWords: Set<string> } {
   const numericSeed = seedFromString(seed)
   const rand = mulberry32(numericSeed)
   const minWords = minWordsForConfig(minLetters)
@@ -168,8 +123,8 @@ export function generateGrid(seed: string, trie: Trie, minLetters = 5): { grid: 
   let bestWords: Set<string> = new Set()
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const grid = generateRandomGrid(rand)
-    const words = findAllWords(grid, trie, minLetters)
+    const grid = generateRandomGrid(rand, 4)
+    const words = findAllWords(grid, trie, minLetters, 10)
 
     if (words.size >= minWords) {
       return { grid, validWords: words }
@@ -181,8 +136,7 @@ export function generateGrid(seed: string, trie: Trie, minLetters = 5): { grid: 
     }
   }
 
-  // Fallback : retourner la meilleure grille trouvée
-  return { grid: bestGrid ?? generateRandomGrid(rand), validWords: bestWords }
+  return { grid: bestGrid ?? generateRandomGrid(rand, 4), validWords: bestWords }
 }
 
 // Vérifie si un chemin de cellules est valide (adjacence + pas de répétition)

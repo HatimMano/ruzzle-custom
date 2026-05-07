@@ -35,6 +35,7 @@ export async function setDisplayName(name: string): Promise<void> {
 
 export interface DailyResultPayload {
   date: string
+  mode: string
   elapsedSecs: number
   completed: boolean
   levelsFound: number
@@ -49,6 +50,7 @@ export async function submitDailyResult(payload: DailyResultPayload): Promise<vo
   const { error } = await supabase.from('daily_results').insert({
     user_id: userId,
     date: payload.date,
+    mode: payload.mode,
     elapsed_secs: payload.elapsedSecs,
     completed: payload.completed,
     levels_found: payload.levelsFound,
@@ -69,13 +71,14 @@ export interface LeaderboardEntry {
   completed: boolean
   is_me: boolean
   pyramid_found: Record<string, string> | null
+  mode: string
 }
 
 export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEntry[]> {
   const myId = await getUserId()
   const { data, error } = await supabase
     .from('daily_results')
-    .select('user_id, elapsed_secs, levels_found, score, completed, pyramid_found, profiles(display_name)')
+    .select('user_id, elapsed_secs, levels_found, score, completed, pyramid_found, mode, profiles(display_name)')
     .eq('date', date)
     .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
@@ -90,6 +93,7 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
     completed: row.completed,
     is_me: row.user_id === myId,
     pyramid_found: row.pyramid_found as Record<string, string> | null,
+    mode: (row as { mode?: string }).mode ?? 'classic',
   }))
 }
 
@@ -150,4 +154,42 @@ export async function submitGameResult(payload: GameResultPayload): Promise<void
     duration_secs: payload.durationSecs,
   })
   if (error) console.error('submitGameResult:', error)
+}
+
+// ─── Records — mots les plus longs ────────────────────────────────────────────
+
+export interface LongestWordEntry {
+  display_name: string | null
+  word: string
+  seed: string
+  is_daily: boolean
+}
+
+export async function fetchLongestWords(): Promise<LongestWordEntry[]> {
+  const { data, error } = await supabase.rpc('top_longest_words', { lim: 3 })
+  if (error) { console.error('fetchLongestWords:', error); return [] }
+  return (data ?? []) as LongestWordEntry[]
+}
+
+// ─── Streak leaderboard ────────────────────────────────────────────────────────
+
+export interface StreakEntry {
+  display_name: string | null
+  best_daily_streak: number
+  daily_played: number
+}
+
+export async function fetchStreakLeaderboard(): Promise<StreakEntry[]> {
+  const { data, error } = await supabase
+    .from('player_stats')
+    .select('best_daily_streak, daily_played, profiles(display_name)')
+    .gt('best_daily_streak', 0)
+    .order('best_daily_streak', { ascending: false })
+    .limit(3)
+  if (error) { console.error('fetchStreakLeaderboard:', error); return [] }
+  return (data ?? []).map(row => ({
+    display_name: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
+    best_daily_streak: row.best_daily_streak,
+    daily_played: row.daily_played,
+  }))
 }

@@ -5,10 +5,20 @@ import Grid from "./components/Grid";
 import Timer from "./components/Timer";
 import ResultsScreen from "./components/ResultsScreen";
 import DailyResultsScreen from "./components/DailyResultsScreen";
+import DailyIntroModal from "./components/DailyIntroModal";
 import { PseudoModal } from "./components/PseudoModal";
 import { loadDictionary, isValidWord, getTrie } from "./lib/dictionary";
-import { generateGrid, generateDailyGrid } from "./lib/gridGenerator";
+import { generateGrid, findWordPath } from "./lib/gridGenerator";
 import type { Cell, Grid as GridType } from "./lib/gridGenerator";
+import {
+  modeForDate,
+  pyramidLevelKey,
+  isPyramidComplete,
+  pyramidLevelsFound,
+  levelLabel,
+  pyramidRows,
+  type DailyModeRules,
+} from "./lib/dailyModes";
 import { scoreForWord } from "./lib/scoring";
 import { randomSeed } from "./lib/prng";
 import { saveToHistory, getHistory, clearHistory } from "./lib/history";
@@ -27,8 +37,10 @@ import {
   submitGameResult,
   setDisplayName,
   fetchDailyLeaderboard,
+  fetchLongestWords,
+  fetchStreakLeaderboard,
 } from "./lib/api";
-import type { LeaderboardEntry } from "./lib/api";
+import type { LeaderboardEntry, LongestWordEntry, StreakEntry } from "./lib/api";
 
 interface GameConfig {
   minLetters: 3 | 4 | 5 | 6 | 7;
@@ -36,7 +48,6 @@ interface GameConfig {
 }
 
 const DEFAULT_CONFIG: GameConfig = { minLetters: 5, duration: 60 };
-const PYRAMID_LENGTHS = [3, 4, 5, 6, 7, 8] as const;
 
 const STREAK_BONUSES: [number, number][] = [
   [7, 5],
@@ -130,6 +141,7 @@ export default function App() {
     id: number;
   } | null>(null);
 
+  const [confirmModal, setConfirmModal] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -139,13 +151,24 @@ export default function App() {
 
   // Daily challenge state
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
+  const [dailyMode, setDailyMode] = useState<DailyModeRules>(() => modeForDate(getDailyDate()));
+  const [introModalMode, setIntroModalMode] = useState<DailyModeRules | null>(null);
   const [pyramidFound, setPyramidFound] = useState<Record<number, string>>({});
   const [elapsed, setElapsed] = useState(0);
+
+  // Daily already played
+  const [dailyPlayedToday] = useState(() => localStorage.getItem('griddle:daily') === getDailyDate())
 
   // Leaderboard drawer
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState<'classement' | 'records' | 'streaks'>('classement')
+  const [longestWords, setLongestWords] = useState<LongestWordEntry[]>([])
+  const [longestWordsLoading, setLongestWordsLoading] = useState(false)
+  const [recordsDiscovery, setRecordsDiscovery] = useState<LongestWordEntry | null>(null)
+  const [streaks, setStreaks] = useState<StreakEntry[]>([])
+  const [streaksLoading, setStreaksLoading] = useState(false)
 
   const seedRef = useRef<string>("");
   const streakTimer = useRef<number>(0);
@@ -158,12 +181,15 @@ export default function App() {
   const prevConfigRef = useRef<GameConfig>(DEFAULT_CONFIG);
   const isDailyChallengeRef = useRef(false);
   const pyramidFoundRef = useRef<Record<number, string>>({});
+  const dailyModeRef = useRef<DailyModeRules>(dailyMode);
+  const stopGameRef = useRef<() => void>(() => {});
 
   scoreRef.current = score;
   foundWordsRef.current = foundWords;
   configRef.current = config;
   isDailyChallengeRef.current = isDailyChallenge;
   pyramidFoundRef.current = pyramidFound;
+  dailyModeRef.current = dailyMode;
   seedRef.current = seed;
 
   function saveDisplayName(name: string) {
@@ -220,11 +246,14 @@ export default function App() {
     if (gameState !== "finished") return;
     if (isDailyChallengeRef.current) {
       const pf = pyramidFoundRef.current;
+      const mode = dailyModeRef.current;
+      localStorage.setItem('griddle:daily', getDailyDate())
       submitDailyResult({
         date: getDailyDate(),
+        mode: mode.id,
         elapsedSecs: elapsedRef.current,
-        completed: PYRAMID_LENGTHS.every((l) => !!pf[l]),
-        levelsFound: PYRAMID_LENGTHS.filter((l) => !!pf[l]).length,
+        completed: isPyramidComplete(mode, pf),
+        levelsFound: pyramidLevelsFound(mode, pf),
         score: scoreRef.current,
         foundWords: foundWordsRef.current,
         pyramidFound: pf,
@@ -241,16 +270,32 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
 
-  // Auto-complete daily challenge when all 6 levels found
+  // Auto-complete daily challenge when all pyramid levels found
   useEffect(() => {
     if (!isDailyChallenge || gameState !== "playing") return;
-    if (PYRAMID_LENGTHS.every((l) => !!pyramidFound[l])) {
+    if (isPyramidComplete(dailyMode, pyramidFound)) {
       clearInterval(elapsedIntervalRef.current);
       window.setTimeout(() => {
         setGameState("finished");
       }, 700);
     }
-  }, [pyramidFound, isDailyChallenge, gameState]);
+  }, [pyramidFound, isDailyChallenge, gameState, dailyMode]);
+
+  // Rappel de temps : à 10min, puis tous les 5min, propose au joueur d'arrêter
+  // (le défi est censé être rapide, certains joueurs restent 30min)
+  const lastReminderAtRef = useRef(0);
+  useEffect(() => {
+    if (!isDailyChallenge || gameState !== "playing") return;
+    if (elapsed < 600) return;
+    if ((elapsed - 600) % 300 !== 0) return;
+    if (lastReminderAtRef.current === elapsed) return;
+    lastReminderAtRef.current = elapsed;
+    const minutes = Math.floor(elapsed / 60);
+    const message = elapsed === 600
+      ? `Ça fait déjà ${minutes} min... ça commence à faire long. Continuer ?`
+      : `Toujours là ? ${minutes} min au compteur. Continuer ?`;
+    setConfirmModal({ message, onConfirm: stopGameRef.current });
+  }, [elapsed, isDailyChallenge, gameState]);
 
   const initGame = (s: string, cfg: GameConfig = config) => {
     const trie = getTrie();
@@ -276,6 +321,23 @@ export default function App() {
 
   const startGame = () => setCountdown(3);
 
+  const requestStartDaily = () => {
+    const mode = modeForDate(getDailyDate());
+    if (mode.intro && !localStorage.getItem(`griddle:intro_seen:${mode.id}`)) {
+      setIntroModalMode(mode);
+      return;
+    }
+    startDailyChallenge();
+  };
+
+  const closeIntroAndStart = () => {
+    if (introModalMode) {
+      localStorage.setItem(`griddle:intro_seen:${introModalMode.id}`, '1');
+    }
+    setIntroModalMode(null);
+    startDailyChallenge();
+  };
+
   const startDailyChallenge = () => {
     prevConfigRef.current = configRef.current;
     clearInterval(elapsedIntervalRef.current);
@@ -284,9 +346,11 @@ export default function App() {
     setPyramidFound({});
     setIsDailyChallenge(true);
     const dailyDate = getDailyDate();
+    const mode = modeForDate(dailyDate);
+    setDailyMode(mode);
     const trie = getTrie();
     if (!trie) return;
-    const { grid: g, validWords: vw } = generateDailyGrid(dailyDate, trie);
+    const { grid: g, validWords: vw } = mode.generate(dailyDate, trie);
     setGrid(g);
     setValidWords(vw);
     setFoundWords([]);
@@ -329,11 +393,10 @@ export default function App() {
 
   const confirmAndStop = () => {
     const msg = isDailyChallengeRef.current ? getDailyAbandonMessage() : getFreeAbandonMessage()
-    if (!confirm(msg)) return
-    stopGame()
+    setConfirmModal({ message: msg, onConfirm: stopGame })
   }
 
-  const stopGame = () => {
+  const stopGame: () => void = () => {
     clearInterval(elapsedIntervalRef.current);
     setTimerRunning(false);
     setGameState("finished");
@@ -349,6 +412,7 @@ export default function App() {
     });
     setHistory(getHistory());
   };
+  stopGameRef.current = stopGame;
 
   const newGame = () => {
     if (gameState === "playing" && !confirm("Abandonner la partie en cours ?"))
@@ -388,7 +452,9 @@ export default function App() {
 
       const pts = scoreForWord(word);
 
-      const dailyLevelKey = isDailyChallengeRef.current ? Math.min(word.length, 8) : null;
+      const dailyLevelKey = isDailyChallengeRef.current
+        ? pyramidLevelKey(dailyModeRef.current, word)
+        : null;
       const levelAlreadyFilled = dailyLevelKey !== null && !!pyramidFoundRef.current[dailyLevelKey];
 
       let bonus = 0;
@@ -462,6 +528,7 @@ export default function App() {
     return (
       <DailyResultsScreen
         date={getDailyDate()}
+        mode={dailyMode}
         elapsedSeconds={elapsedRef.current}
         pyramidFound={pyramidFound}
         foundWords={foundWords}
@@ -571,72 +638,132 @@ export default function App() {
     return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
   }
 
-  const LeaderboardDrawer = () => (
-    <div
-      className="absolute inset-0 bg-slate-900/80 z-10 flex items-end"
-      onClick={() => setShowLeaderboard(false)}
-    >
+  const LeaderboardDrawer = () => {
+    const trie = getTrie()
+    const recordGrid = recordsDiscovery && trie
+      ? (recordsDiscovery.is_daily
+          ? modeForDate(recordsDiscovery.seed).generate(recordsDiscovery.seed, trie).grid
+          : generateGrid(recordsDiscovery.seed, trie).grid)
+      : null
+    const recordPath = recordGrid && recordsDiscovery
+      ? findWordPath(recordGrid, recordsDiscovery.word)
+      : null
+
+    return (
       <div
-        className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[75vh] flex flex-col gap-3"
-        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 bg-slate-900/80 z-10 flex items-end"
+        onClick={() => { setShowLeaderboard(false); setRecordsDiscovery(null) }}
       >
-        <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
-        <div className="flex items-center gap-2">
-          <Trophy size={16} style={{ color: "#fbbf24" }} />
-          <span className="font-bold text-white text-base">Classement du jour</span>
-        </div>
-        <div className="overflow-y-auto flex flex-col gap-2">
-          {leaderboardLoading && (
-            <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>
-          )}
-          {!leaderboardLoading && leaderboard.length === 0 && (
-            <p className="text-slate-600 text-sm text-center py-6">Aucun résultat pour aujourd'hui</p>
-          )}
-          {!leaderboardLoading && leaderboard.map((entry) => (
-            <div
-              key={entry.rank}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "0.75rem 1rem",
-                borderRadius: "0.875rem",
-                background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)",
-                border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)",
-                gap: "0.5rem",
+        <div
+          className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[80vh] flex flex-col gap-3"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
+
+          {/* Tabs */}
+          <div style={{ display: "flex", background: "rgba(30,41,59,0.9)", borderRadius: "999px", padding: "0.25rem", gap: "0.25rem" }}>
+            {([['classement', '🏆 Jour'], ['records', '⭐ Records'], ['streaks', '🔥 Séries']] as const).map(([id, label]) => (
+              <button key={id} onClick={() => {
+                setLeaderboardTab(id); setRecordsDiscovery(null)
+                if (id === 'records' && longestWords.length === 0) { setLongestWordsLoading(true); fetchLongestWords().then(setLongestWords).finally(() => setLongestWordsLoading(false)) }
+                if (id === 'streaks' && streaks.length === 0) { setStreaksLoading(true); fetchStreakLeaderboard().then(setStreaks).finally(() => setStreaksLoading(false)) }
               }}
-            >
-              <span style={{ width: "2rem", fontSize: "1.1rem", flexShrink: 0 }}>
-                {RANK_MEDAL[entry.rank] ?? entry.rank}
-              </span>
-              <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {entry.display_name ?? `Joueur #${entry.rank}`}
-                {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem", flexShrink: 0 }}>
-                <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>{entry.score} pts</p>
-                <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
-                <div style={{ display: "flex", gap: "3px" }}>
-                  {[3,4,5,6,7,8].map(l => (
-                    <div
-                      key={l}
-                      style={{
-                        width: "13px",
-                        height: "13px",
-                        borderRadius: "3px",
-                        background: entry.pyramid_found?.[l]
-                          ? l === 8 ? "rgba(251,191,36,0.85)" : "rgba(16,185,129,0.75)"
-                          : "rgba(71,85,105,0.3)",
-                      }}
-                    />
-                  ))}
+                style={{ flex: 1, padding: "0.5rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", border: "none", background: leaderboardTab === id ? "white" : "transparent", color: leaderboardTab === id ? "#0f172a" : "#64748b", transition: "all 0.15s" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="overflow-y-auto flex flex-col gap-2">
+            {/* Classement tab */}
+            {leaderboardTab === 'classement' && (<>
+              {leaderboardLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
+              {!leaderboardLoading && leaderboard.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucun résultat pour aujourd'hui</p>}
+              {!leaderboardLoading && leaderboard.map((entry) => {
+                const displayScore = entry.score + Math.max(0, 4 - entry.rank)
+                return (
+                  <div key={entry.rank} style={{ display: "flex", alignItems: "center", padding: "0.75rem 1rem", borderRadius: "0.875rem", background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)", border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)", gap: "0.5rem" }}>
+                    <span style={{ width: "2rem", fontSize: "1.1rem", flexShrink: 0 }}>{RANK_MEDAL[entry.rank] ?? entry.rank}</span>
+                    <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {entry.display_name ?? `Joueur #${entry.rank}`}
+                      {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.7rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
+                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem", flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
+                        <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>{displayScore} pts</p>
+                        {entry.rank <= 3 && <span style={{ fontSize: "0.6rem", color: "#475569" }}>+{4 - entry.rank}</span>}
+                      </div>
+                      <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
+                      <div style={{ display: "flex", gap: "3px" }}>
+                        {(() => {
+                          const lens = modeForDate(getDailyDate()).pyramidLengths
+                          const max = lens[lens.length - 1]
+                          return lens.map(l => (
+                            <div key={l} style={{ width: "13px", height: "13px", borderRadius: "3px", background: entry.pyramid_found?.[l] ? l === max ? "rgba(251,191,36,0.85)" : "rgba(16,185,129,0.75)" : "rgba(71,85,105,0.3)" }} />
+                          ))
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </>)}
+
+            {/* Streaks tab */}
+            {leaderboardTab === 'streaks' && (<>
+              {streaksLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
+              {!streaksLoading && streaks.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucune série pour l'instant</p>}
+              {!streaksLoading && streaks.slice(0, 3).map((entry, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", padding: "0.7rem 1rem", borderRadius: "0.875rem", background: "rgba(30,41,59,0.6)", border: "1px solid rgba(71,85,105,0.15)", gap: "0.75rem" }}>
+                  <span style={{ fontSize: "1rem", flexShrink: 0 }}>{['🥇','🥈','🥉'][i]}</span>
+                  <span style={{ flex: 1, fontWeight: 500, color: "#e2e8f0", fontSize: "0.9rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {entry.display_name ?? 'Anonyme'}
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.15rem", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem" }}>
+                      <span style={{ fontWeight: 700, color: "white", fontSize: "0.9rem", fontVariantNumeric: "tabular-nums" }}>{entry.best_daily_streak}</span>
+                      <span style={{ fontSize: "0.65rem", color: "#475569" }}>jours</span>
+                    </div>
+                    <span style={{ fontSize: "0.65rem", color: "#334155" }}>{entry.daily_played} défis</span>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              ))}
+            </>)}
+
+            {/* Records tab */}
+            {leaderboardTab === 'records' && (<>
+              {longestWordsLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
+              {!longestWordsLoading && longestWords.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucun record pour l'instant</p>}
+              {!longestWordsLoading && longestWords.slice(0, 3).map((entry, i) => {
+                const active = recordsDiscovery?.word === entry.word && recordsDiscovery?.seed === entry.seed
+                return (
+                  <div key={i}>
+                    <button
+                      onClick={() => setRecordsDiscovery(active ? null : entry)}
+                      style={{ display: "flex", alignItems: "center", width: "100%", padding: "0.75rem 1rem", borderRadius: "0.875rem", background: active ? "rgba(109,40,217,0.15)" : "rgba(30,41,59,0.8)", border: active ? "1px solid rgba(109,40,217,0.3)" : "1px solid rgba(71,85,105,0.25)", gap: "0.75rem", cursor: "pointer" }}
+                    >
+                      <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>{['🥇','🥈','🥉'][i]}</span>
+                      <span style={{ flex: 1, fontWeight: 700, color: active ? "#c4b5fd" : "white", textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "0.95rem", textAlign: "left" }}>{entry.word}</span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.15rem", flexShrink: 0 }}>
+                        <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: "999px", background: "rgba(109,40,217,0.2)", color: "#c4b5fd" }}>{entry.word.length}L</span>
+                        <span style={{ fontSize: "0.65rem", color: "#475569" }}>{entry.display_name ?? 'Anonyme'}</span>
+                      </div>
+                    </button>
+                    {active && recordGrid && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem", padding: "0.75rem", borderRadius: "0.875rem", background: "rgba(15,23,42,0.8)", marginTop: "0.25rem" }}>
+                        <Grid grid={recordGrid} onWordSubmit={() => null} disabled discoveryPath={recordPath ?? undefined} />
+                        {!recordPath && <p style={{ fontSize: "0.8rem", color: "#475569" }}>Chemin non trouvé</p>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </>)}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    )
+  };
 
   // === READY ===
   if (gameState === "ready") {
@@ -728,8 +855,12 @@ export default function App() {
               </button>
               <button
                 onClick={() => {
+                  const opening = !showLeaderboard;
                   setShowLeaderboard((v) => !v);
-                  if (!showLeaderboard && leaderboard.length === 0) {
+                  if (opening) {
+                    setLeaderboard([]);
+                    setStreaks([]);
+                    setLongestWords([]);
                     setLeaderboardLoading(true);
                     fetchDailyLeaderboard(getDailyDate())
                       .then(setLeaderboard)
@@ -796,53 +927,83 @@ export default function App() {
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
 
               {/* Carte Défi du jour */}
+              {(() => {
+                const todayMode = modeForDate(getDailyDate());
+                const { cardBg, cardBorder, cardShadow, accent, accentSoft, slotBg, slotBorder, buttonBg, buttonBorder } = todayMode.palette;
+                const isBirthday = todayMode.id === "birthday-2026-04-30";
+                const sixties = isBirthday
+                  ? Array.from({ length: 14 }, (_, i) => ({
+                      top: (i * 37 + 13) % 90,
+                      left: (i * 53 + 7) % 92,
+                      size: 1.4 + ((i * 7) % 5) * 0.35,
+                      rotate: ((i * 41) % 60) - 30,
+                      opacity: 0.07 + ((i * 13) % 5) * 0.02,
+                    }))
+                  : [];
+                return (
               <div
                 style={{
+                  position: "relative",
                   borderRadius: "1.5rem",
-                  background: "linear-gradient(135deg, rgba(217,119,6,0.3) 0%, rgba(234,179,8,0.1) 100%)",
-                  border: "1px solid rgba(217,119,6,0.45)",
-                  boxShadow: "0 0 28px rgba(217,119,6,0.12)",
+                  background: cardBg,
+                  border: cardBorder,
+                  boxShadow: cardShadow,
                   overflow: "hidden",
                 }}
               >
-                <div style={{ padding: "1.25rem 1.25rem 1rem" }}>
+                {sixties.map((s, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      position: "absolute",
+                      top: `${s.top}%`,
+                      left: `${s.left}%`,
+                      fontSize: `${s.size}rem`,
+                      fontWeight: 900,
+                      color: accent,
+                      opacity: s.opacity,
+                      transform: `rotate(${s.rotate}deg)`,
+                      pointerEvents: "none",
+                      lineHeight: 1,
+                      userSelect: "none",
+                    }}
+                  >
+                    60
+                  </span>
+                ))}
+                <div style={{ padding: "1.25rem 1.25rem 1rem", position: "relative" }}>
                   <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
-                    PYRAMIDDLE
+                    {todayMode.name.toUpperCase()}
                   </p>
-                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(251,191,36,0.7)", marginBottom: "1rem" }}>
-                    Défi du jour · complète la pyramide · {getDailyDate()}
+                  <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: "1rem" }}>
+                    {todayMode.subtitle}
                   </p>
                   {/* Mini pyramide */}
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
-                      {(["8L+"] as const).map((l) => (
-                        <div key={l} style={{ padding: "0.3rem 0.9rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
-                      {(["6L", "7L"] as const).map((l) => (
-                        <div key={l} style={{ padding: "0.3rem 0.75rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
-                      {(["3L", "4L", "5L"] as const).map((l) => (
-                        <div key={l} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>{l}</div>
-                      ))}
-                    </div>
+                    {pyramidRows(todayMode).map((row, ri) => (
+                      <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>
+                        {row.map((len) => (
+                          <div key={len} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                            {levelLabel(todayMode, len)}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <button
-                  onClick={startDailyChallenge}
+                  onClick={requestStartDaily}
                   style={{
+                    position: "relative",
                     width: "100%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "0.5rem",
                     padding: "0.9rem",
-                    background: "rgba(217,119,6,0.5)",
+                    background: buttonBg,
                     border: "none",
-                    borderTop: "1px solid rgba(217,119,6,0.3)",
+                    borderTop: buttonBorder,
                     color: "white",
                     fontSize: "1.05rem",
                     fontWeight: 700,
@@ -851,8 +1012,11 @@ export default function App() {
                 >
                   <Play size={16} fill="white" style={{ color: "white" }} />
                   Jouer
+                  {dailyPlayedToday && <span style={{ fontSize: "0.7rem", fontWeight: 600, opacity: 0.6, marginLeft: "0.25rem" }}>· déjà soumis</span>}
                 </button>
               </div>
+                );
+              })()}
 
               {/* Carte Partie libre */}
               <div
@@ -949,6 +1113,9 @@ export default function App() {
           onSave={saveDisplayName}
           onCancel={() => setShowNameModal(false)}
         />
+        {introModalMode && (
+          <DailyIntroModal mode={introModalMode} onClose={closeIntroAndStart} />
+        )}
       </div>
     );
   }
@@ -1192,9 +1359,10 @@ export default function App() {
         {/* Pyramid strip (daily) or found words strip (normal) */}
         {isDailyChallenge ? (
           <div className="flex gap-1.5 w-full">
-            {(PYRAMID_LENGTHS as unknown as number[]).map((len) => {
+            {dailyMode.pyramidLengths.map((len) => {
               const word = pyramidFound[len];
-              const label = len === 8 ? "8+" : `${len}L`;
+              const max = dailyMode.pyramidLengths[dailyMode.pyramidLengths.length - 1];
+              const label = len === max ? `${len}+` : `${len}L`;
               return (
                 <div
                   key={len}
@@ -1257,6 +1425,56 @@ export default function App() {
 
 
       {showHistory && <HistoryDrawer />}
+
+      {/* Modal de confirmation abandon */}
+      {confirmModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 100,
+          background: "rgba(0,0,0,0.7)",
+          display: "flex", alignItems: "flex-end", justifyContent: "center",
+          padding: "0 1rem 2rem",
+          backdropFilter: "blur(4px)",
+        }}>
+          <div style={{
+            width: "100%", maxWidth: "28rem",
+            background: "#111827",
+            border: "1px solid rgba(71,85,105,0.4)",
+            borderRadius: "1.5rem",
+            padding: "1.5rem",
+            display: "flex", flexDirection: "column", gap: "1.25rem",
+          }}>
+            <p style={{ fontSize: "1rem", fontWeight: 600, color: "white", lineHeight: 1.5, textAlign: "center" }}>
+              {confirmModal.message}
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{
+                  flex: 1, padding: "0.85rem",
+                  borderRadius: "1rem",
+                  background: "rgba(30,41,59,0.8)",
+                  border: "1px solid rgba(71,85,105,0.4)",
+                  color: "#94a3b8", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Continuer
+              </button>
+              <button
+                onClick={() => { setConfirmModal(null); confirmModal.onConfirm() }}
+                style={{
+                  flex: 1, padding: "0.85rem",
+                  borderRadius: "1rem",
+                  background: "rgba(185,28,28,0.3)",
+                  border: "1px solid rgba(185,28,28,0.5)",
+                  color: "#fca5a5", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                Oui, je pars
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

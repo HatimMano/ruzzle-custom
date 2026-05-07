@@ -10,6 +10,7 @@ create table if not exists daily_results (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references profiles(id) on delete cascade,
   date          text not null,
+  mode          text not null default 'classic',  -- 'classic' | 'bigriddle' | 'birthday-2026-04-30' | ...
   elapsed_secs  int,
   completed     bool not null default false,
   levels_found  int not null default 0,
@@ -19,6 +20,10 @@ create table if not exists daily_results (
   created_at    timestamptz default now(),
   unique (user_id, date)
 );
+
+-- Migration : ajouter mode si la table existe déjà
+alter table daily_results add column if not exists mode text not null default 'classic';
+create index if not exists idx_daily_results_date_mode on daily_results(date, mode);
 
 -- ─── Normal game results ──────────────────────────────────────────────────────
 create table if not exists game_results (
@@ -279,3 +284,30 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure handle_new_user();
+
+-- ─── Top mots les plus longs (toutes parties + défis) ────────────────────────
+create or replace function top_longest_words(lim int default 5)
+returns table(display_name text, word text, seed text, is_daily boolean)
+language sql security definer as $$
+  select * from (
+    select
+      coalesce(gr.display_name, p.display_name) as display_name,
+      word,
+      gr.seed,
+      false as is_daily
+    from game_results gr
+    left join profiles p on p.id = gr.user_id,
+    lateral unnest(gr.found_words) as word
+    union all
+    select
+      p.display_name as display_name,
+      word,
+      dr.date as seed,
+      true as is_daily
+    from daily_results dr
+    left join profiles p on p.id = dr.user_id,
+    lateral unnest(dr.found_words) as word
+  ) all_words
+  order by length(word) desc, word
+  limit lim;
+$$;

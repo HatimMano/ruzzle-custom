@@ -246,6 +246,11 @@ export const FREE_ABANDON: string[] = [
 ]
 
 export function getDailyAbandonMessage(): string {
+  const today = new Date()
+  const isoDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  if (isoDate === '2026-04-30') {
+    return "Pas aujourd'hui. Pas après 60 années 🎂"
+  }
   const dayIndex = Math.floor(Date.now() / 86400000)
   return DAILY_ABANDON[dayIndex % DAILY_ABANDON.length]
 }

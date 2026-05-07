@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Grid from "./Grid";
 import { scoreForWord } from "../lib/scoring";
 import { findWordPath } from "../lib/gridGenerator";
@@ -22,12 +22,15 @@ interface Props {
 type Tab = "trouves" | "tous";
 
 const SCORE_STYLE: Record<number, { color: string; bg: string }> = {
-  1: { color: "#94a3b8", bg: "rgba(71,85,105,0.25)" },
-  2: { color: "#94a3b8", bg: "rgba(71,85,105,0.25)" },
+  1: { color: "#64748b", bg: "rgba(71,85,105,0.2)" },
+  2: { color: "#64748b", bg: "rgba(71,85,105,0.2)" },
   4: { color: "#a78bfa", bg: "rgba(109,40,217,0.2)" },
-  7: { color: "#fbbf24", bg: "rgba(161,98,7,0.25)" },
-  12: { color: "#fb923c", bg: "rgba(154,52,18,0.25)" },
+  7: { color: "#fb923c", bg: "rgba(234,88,12,0.2)" },
+  12: { color: "#f87171", bg: "rgba(239,68,68,0.2)" },
 };
+
+const lenColor = (len: number) =>
+  len >= 7 ? "#c084fc" : len >= 5 ? "#60a5fa" : "#94a3b8";
 
 export default function ResultsScreen({
   seed,
@@ -46,11 +49,10 @@ export default function ResultsScreen({
   const [tab, setTab] = useState<Tab>("tous");
   const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const copiedTimer = useRef<number>(0);
 
   const missed = [...validWords]
     .filter((w) => !foundWords.includes(w))
-    .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b));
+    .sort((a, b) => b.length - a.length || a.localeCompare(b));
 
   const pct =
     validWords.size > 0
@@ -84,8 +86,7 @@ export default function ResultsScreen({
   function copySummary() {
     navigator.clipboard.writeText(summary);
     setCopied(true);
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = window.setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   const scoreStyle = (s: number) => SCORE_STYLE[s] ?? SCORE_STYLE[1];
@@ -326,7 +327,7 @@ export default function ResultsScreen({
                 Aucun mot trouvé
               </p>
             )}
-            {[...foundWords].reverse().map((w, i) => {
+            {[...foundWords].sort((a, b) => b.length - a.length || a.localeCompare(b)).map((w, i) => {
               const s = scoreForWord(w);
               const { color, bg } = scoreStyle(s);
               return (
@@ -351,19 +352,22 @@ export default function ResultsScreen({
                   >
                     {w}
                   </span>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      fontVariantNumeric: "tabular-nums",
-                      padding: "0.2rem 0.55rem",
-                      borderRadius: "999px",
-                      background: bg,
-                      color,
-                    }}
-                  >
-                    +{s} pts
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span style={{ fontSize: "0.65rem", color: lenColor(w.length), fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{w.length}L</span>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        fontVariantNumeric: "tabular-nums",
+                        padding: "0.2rem 0.55rem",
+                        borderRadius: "999px",
+                        background: bg,
+                        color,
+                      }}
+                    >
+                      +{s} pts
+                    </span>
+                  </div>
                 </div>
               );
             })}
@@ -404,7 +408,7 @@ export default function ResultsScreen({
             )}
 
             {[...validWords]
-              .sort((a, b) => scoreForWord(b) - scoreForWord(a) || a.localeCompare(b))
+              .sort((a, b) => b.length - a.length || a.localeCompare(b))
               .map((w, i) => {
                 const s = scoreForWord(w);
                 const { color, bg } = scoreStyle(s);
@@ -440,19 +444,22 @@ export default function ResultsScreen({
                     >
                       {w}
                     </span>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        fontVariantNumeric: "tabular-nums",
-                        padding: "0.2rem 0.55rem",
-                        borderRadius: "999px",
-                        background: active ? "rgba(109,40,217,0.2)" : found ? bg : "rgba(30,41,59,0.6)",
-                        color: active ? "#c4b5fd" : found ? color : "#334155",
-                      }}
-                    >
-                      +{s} pts
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <span style={{ fontSize: "0.65rem", color: active ? "#c4b5fd" : found ? lenColor(w.length) : "#334155", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{w.length}L</span>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          padding: "0.2rem 0.55rem",
+                          borderRadius: "999px",
+                          background: active ? "rgba(109,40,217,0.2)" : found ? bg : "rgba(30,41,59,0.6)",
+                          color: active ? "#c4b5fd" : found ? color : "#334155",
+                        }}
+                      >
+                        +{s} pts
+                      </span>
+                    </div>
                   </button>
                 );
               })}

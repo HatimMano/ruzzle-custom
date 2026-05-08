@@ -50,22 +50,29 @@ export interface DailyResultPayload {
   pyramidFound: PyramidFoundPayload
 }
 
+// Soumission via Edge Function `submit_daily` (anti-cheat) :
+// le serveur régénère la grille, valide chaque mot, recalcule le score canoniquement
+// et fait l'insert avec service role. Le client ne dicte plus le score.
 export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {
-  const userId = await ensureAuth()
-  console.log('[submitDailyResult] userId:', userId, 'payload:', payload)
-  const { error } = await supabase.from('daily_results').insert({
-    user_id: userId,
-    date: payload.date,
-    mode: payload.mode,
-    elapsed_secs: payload.elapsedSecs,
-    completed: payload.completed,
-    levels_found: payload.levelsFound,
-    score: payload.score,
-    found_words: payload.foundWords,
-    pyramid_found: payload.pyramidFound,
+  await ensureAuth()
+  const { data, error } = await supabase.functions.invoke('submit_daily', {
+    body: {
+      date: payload.date,
+      mode: payload.mode,
+      elapsedSecs: payload.elapsedSecs,
+      foundWords: payload.foundWords,
+      pyramidFound: payload.pyramidFound,
+    },
   })
-  if (error) console.error('[submitDailyResult] error:', error)
-  else console.log('[submitDailyResult] success')
+  if (error) {
+    console.error('[submitDailyResult] edge function error:', error)
+    return
+  }
+  if (data && (data as { ok?: boolean }).ok === false) {
+    console.error('[submitDailyResult] server rejected:', data)
+    return
+  }
+  console.log('[submitDailyResult] success', data)
 }
 
 export interface LeaderboardEntry {

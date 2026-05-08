@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Copy, Home } from "lucide-react";
+import { scoreForLen } from "../lib/scoring";
 import { scoreForWord } from "../lib/scoring";
 import { findWordPath } from "../lib/gridGenerator";
 import type { Cell, Grid as GridType } from "../lib/gridGenerator";
@@ -120,9 +121,10 @@ export default function DailyResultsScreen({
     ? findWordPath(grid, discoveryWord)
     : null;
 
+  // Score = score du créneau (pas du mot) — un mot long peut remplir un créneau court
   const score = mode.pyramidLengths.reduce((acc, l) => {
     if (!pyramidFound[l]) return acc;
-    return acc + scoreForWord(pyramidFound[l]);
+    return acc + scoreForLen(l);
   }, 0);
 
   useEffect(() => {

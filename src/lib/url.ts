@@ -32,6 +32,11 @@ export function setURLParams(seed: string, config: URLGameConfig) {
   window.history.replaceState({}, '', url)
 }
 
+// Override de mode pour test : ?mode=marathon, ?mode=bigriddle, etc.
+export function getModeOverride(): string | null {
+  return new URLSearchParams(window.location.search).get('mode')
+}
+
 export function buildShareURL(seed: string, config: URLGameConfig): string {
   const url = new URL(window.location.href)
   url.searchParams.set('seed', seed)

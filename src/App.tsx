@@ -5,6 +5,8 @@ import DailyResultsScreen from "./components/DailyResultsScreen";
 import DailyIntroModal from "./components/DailyIntroModal";
 import HomeScreen from "./components/HomeScreen";
 import PlayingScreen from "./components/PlayingScreen";
+import MarathonGameScreen, { type MarathonResult } from "./components/MarathonGameScreen";
+import MarathonResultsScreen from "./components/MarathonResultsScreen";
 import ConfirmModal from "./components/ConfirmModal";
 import { PseudoModal } from "./components/PseudoModal";
 import { loadDictionary, isValidWord, getTrie } from "./lib/dictionary";
@@ -12,16 +14,18 @@ import { generateGrid } from "./lib/gridGenerator";
 import type { Cell, Grid as GridType } from "./lib/gridGenerator";
 import {
   modeForDate,
-  pyramidLevelKey,
+  pyramidSlotForWord,
   isPyramidComplete,
   pyramidLevelsFound,
-  type DailyModeRules,
+  isPyramidMode,
+  isMarathonMode,
+  type DailyMode,
 } from "./lib/dailyModes";
-import { scoreForWord } from "./lib/scoring";
+import { scoreForWord, scoreForLen } from "./lib/scoring";
 import { randomSeed } from "./lib/prng";
 import { saveToHistory, getHistory } from "./lib/history";
 import type { HistoryEntry } from "./lib/history";
-import { getDailyDate, getSeedFromURL, getConfigFromURL, setURLParams, buildShareURL } from "./lib/url";
+import { getDailyDate, getSeedFromURL, getConfigFromURL, setURLParams, buildShareURL, getModeOverride } from "./lib/url";
 import { getBestScore, saveBestScore } from "./lib/bestScore";
 import { loadDailySession, saveDailySession, clearDailySession } from "./lib/dailySession";
 import { useScoreAnimation } from "./hooks/useScoreAnimation";
@@ -78,10 +82,14 @@ export default function App() {
 
   // Daily challenge state
   const [isDailyChallenge, setIsDailyChallenge] = useState(false);
-  const [dailyMode, setDailyMode] = useState<DailyModeRules>(() => modeForDate(getDailyDate()));
-  const [introModalMode, setIntroModalMode] = useState<DailyModeRules | null>(null);
+  const [dailyMode, setDailyMode] = useState<DailyMode>(() => modeForDate(getDailyDate(), getModeOverride()));
+  const [introModalMode, setIntroModalMode] = useState<DailyMode | null>(null);
   const [pyramidFound, setPyramidFound] = useState<Record<number, string>>({});
   const [elapsed, setElapsed] = useState(0);
+  // Marathon-only state (3 grilles à la suite)
+  const [marathonGrids, setMarathonGrids] = useState<GridType[]>([]);
+  const [marathonValidWordsPerGrid, setMarathonValidWordsPerGrid] = useState<Set<string>[]>([]);
+  const [marathonResult, setMarathonResult] = useState<MarathonResult | null>(null);
 
   // Daily already played
   const [dailyPlayedToday] = useState(() => localStorage.getItem('griddle:daily') === getDailyDate())
@@ -96,7 +104,7 @@ export default function App() {
   const prevConfigRef = useRef<GameConfig>(DEFAULT_CONFIG);
   const isDailyChallengeRef = useRef(false);
   const pyramidFoundRef = useRef<Record<number, string>>({});
-  const dailyModeRef = useRef<DailyModeRules>(dailyMode);
+  const dailyModeRef = useRef<DailyMode>(dailyMode);
   const stopGameRef = useRef<() => void>(() => {});
 
   scoreRef.current = score;
@@ -127,31 +135,37 @@ export default function App() {
       setHistory(getHistory());
 
       // Reprise d'un défi du jour en cours (refresh / fermeture-onglet)
+      // Marathon ne supporte pas la reprise pour l'instant — on l'ignore.
       const dailyDate = getDailyDate();
       const session = loadDailySession(dailyDate);
       const trie = getTrie();
       if (session && trie) {
-        const mode = modeForDate(dailyDate);
-        const { grid: g, validWords: vw } = mode.generate(dailyDate, trie);
-        setSeed(dailyDate);
-        setConfig({ minLetters: 3, duration: 0 });
-        setDailyMode(mode);
-        setIsDailyChallenge(true);
-        setGrid(g);
-        setValidWords(vw);
-        setFoundWords(session.foundWords);
-        setPyramidFound(session.pyramidFound);
-        const restoredScore = Object.values(session.pyramidFound).reduce(
-          (acc, w) => acc + scoreForWord(w),
-          0
-        );
-        setScore(restoredScore);
-        setStreak(0);
-        setTimerRunning(false);
-        setCountdown(null);
-        setGameState("playing");
-        startElapsedTimer(session.startedAt);
-        return;
+        const mode = modeForDate(dailyDate, getModeOverride());
+        if (isPyramidMode(mode)) {
+          const { grid: g, validWords: vw } = mode.generate(dailyDate, trie);
+          setSeed(dailyDate);
+          setConfig({ minLetters: 3, duration: 0 });
+          setDailyMode(mode);
+          setIsDailyChallenge(true);
+          setGrid(g);
+          setValidWords(vw);
+          setFoundWords(session.foundWords);
+          setPyramidFound(session.pyramidFound);
+          // Score restauré = score des créneaux remplis (règle créneau, pas mot)
+          const restoredScore = Object.keys(session.pyramidFound).reduce(
+            (acc, k) => acc + scoreForLen(parseInt(k)),
+            0
+          );
+          setScore(restoredScore);
+          setStreak(0);
+          setTimerRunning(false);
+          setCountdown(null);
+          setGameState("playing");
+          startElapsedTimer(session.startedAt);
+          return;
+        }
+        // Mode marathon : on jette la session pyramide existante
+        clearDailySession(dailyDate);
       }
 
       const s = getSeedFromURL() || randomSeed();
@@ -204,20 +218,45 @@ export default function App() {
   useEffect(() => {
     if (gameState !== "finished") return;
     if (isDailyChallengeRef.current) {
-      const pf = pyramidFoundRef.current;
       const mode = dailyModeRef.current;
       localStorage.setItem('griddle:daily', getDailyDate())
       clearDailySession(getDailyDate())
-      submitDailyResult({
-        date: getDailyDate(),
-        mode: mode.id,
-        elapsedSecs: elapsedRef.current,
-        completed: isPyramidComplete(mode, pf),
-        levelsFound: pyramidLevelsFound(mode, pf),
-        score: scoreRef.current,
-        foundWords: foundWordsRef.current,
-        pyramidFound: pf,
-      }).catch(console.error);
+
+      if (isMarathonMode(mode) && marathonResult) {
+        const allFull = marathonResult.pyramidFoundPerGrid.every((p) =>
+          isPyramidComplete(mode, p)
+        );
+        const totalLevels = marathonResult.pyramidFoundPerGrid.reduce(
+          (acc, p) => acc + pyramidLevelsFound(mode, p),
+          0
+        );
+        const nestedPyramid = marathonResult.pyramidFoundPerGrid.reduce(
+          (acc, p, i) => { acc[String(i)] = p; return acc; },
+          {} as Record<string, Record<number, string>>
+        );
+        submitDailyResult({
+          date: getDailyDate(),
+          mode: mode.id,
+          elapsedSecs: marathonResult.totalElapsedSecs,
+          completed: allFull,
+          levelsFound: totalLevels,
+          score: marathonResult.totalScore,
+          foundWords: marathonResult.foundWordsPerGrid.flat(),
+          pyramidFound: nestedPyramid,
+        }).catch(console.error);
+      } else if (isPyramidMode(mode)) {
+        const pf = pyramidFoundRef.current;
+        submitDailyResult({
+          date: getDailyDate(),
+          mode: mode.id,
+          elapsedSecs: elapsedRef.current,
+          completed: isPyramidComplete(mode, pf),
+          levelsFound: pyramidLevelsFound(mode, pf),
+          score: scoreRef.current,
+          foundWords: foundWordsRef.current,
+          pyramidFound: pf,
+        }).catch(console.error);
+      }
     } else {
       submitGameResult({
         seed: seedRef.current,
@@ -230,9 +269,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
 
-  // Auto-complete daily challenge when all pyramid levels found
+  // Auto-complete daily challenge when all pyramid levels found (pyramide uniquement)
   useEffect(() => {
     if (!isDailyChallenge || gameState !== "playing") return;
+    if (!isPyramidMode(dailyMode)) return;
     if (isPyramidComplete(dailyMode, pyramidFound)) {
       clearInterval(elapsedIntervalRef.current);
       window.setTimeout(() => {
@@ -272,7 +312,7 @@ export default function App() {
   const startGame = () => setCountdown(3);
 
   const requestStartDaily = () => {
-    const mode = modeForDate(getDailyDate());
+    const mode = modeForDate(getDailyDate(), getModeOverride());
     if (mode.intro && !localStorage.getItem(`griddle:intro_seen:${mode.id}`)) {
       setIntroModalMode(mode);
       return;
@@ -296,10 +336,33 @@ export default function App() {
     setPyramidFound({});
     setIsDailyChallenge(true);
     const dailyDate = getDailyDate();
-    const mode = modeForDate(dailyDate);
+    const mode = modeForDate(dailyDate, getModeOverride());
     setDailyMode(mode);
     const trie = getTrie();
     if (!trie) return;
+
+    if (isMarathonMode(mode)) {
+      const { grids, validWordsPerGrid } = mode.generate(dailyDate, trie);
+      setMarathonGrids(grids);
+      setMarathonValidWordsPerGrid(validWordsPerGrid);
+      setMarathonResult(null);
+      // Pas de countdown pour marathon : on rentre direct, le timer interne au composant gère
+      setSeed(dailyDate);
+      setConfig({ minLetters: 3, duration: 0 });
+      setGrid(null);
+      setValidWords(new Set());
+      setFoundWords([]);
+      setScore(0);
+      setStreak(0);
+      clearStreakFlash();
+      clearScoreAnim();
+      setTimerRunning(false);
+      setCountdown(null);
+      setGameState("playing");
+      return;
+    }
+
+    // Mode pyramide classique
     const { grid: g, validWords: vw } = mode.generate(dailyDate, trie);
     setGrid(g);
     setValidWords(vw);
@@ -400,41 +463,39 @@ export default function App() {
         return "invalid";
       }
 
-      const pts = scoreForWord(word);
-
-      const dailyLevelKey = isDailyChallengeRef.current
-        ? pyramidLevelKey(dailyModeRef.current, word)
+      // Daily : on remplit le plus long créneau pyramide ≤ longueur du mot, et le
+      // score = score du créneau (pas du mot). Un 10L peut donc remplir un 6L vide.
+      const dailySlot = isDailyChallengeRef.current
+        ? pyramidSlotForWord(dailyModeRef.current, word, pyramidFoundRef.current)
         : null;
-      const levelAlreadyFilled = dailyLevelKey !== null && !!pyramidFoundRef.current[dailyLevelKey];
 
       let bonus = 0;
       let newStreak = streak;
       let total: number;
 
       if (isDailyChallengeRef.current) {
-        // Défi du jour : pas de bonus de série, points seulement si niveau pyramide nouveau
-        total = levelAlreadyFilled ? 0 : pts;
+        // Pas de bonus de série en daily ; score = score du créneau rempli (0 si rien à remplir)
+        total = dailySlot !== null ? scoreForLen(dailySlot) : 0;
       } else {
         newStreak = streak + 1;
         bonus = streakBonus(newStreak);
-        total = pts + bonus;
+        total = scoreForWord(word) + bonus;
         setStreak(newStreak);
       }
 
       setFoundWords((prev) => [...prev, word]);
       if (total > 0) setScore((prev) => prev + total);
 
-      // Daily challenge: track pyramid levels
-      if (dailyLevelKey !== null && !pyramidFoundRef.current[dailyLevelKey]) {
-        setPyramidFound((prev) => ({ ...prev, [dailyLevelKey]: word }));
+      if (dailySlot !== null) {
+        setPyramidFound((prev) => ({ ...prev, [dailySlot]: word }));
       }
 
       // Persiste la session daily à chaque mot trouvé (refresh-proof)
       if (isDailyChallengeRef.current) {
         const nextFoundWords = [...foundWordsRef.current, word];
         const nextPyramid =
-          dailyLevelKey !== null && !pyramidFoundRef.current[dailyLevelKey]
-            ? { ...pyramidFoundRef.current, [dailyLevelKey]: word }
+          dailySlot !== null
+            ? { ...pyramidFoundRef.current, [dailySlot]: word }
             : pyramidFoundRef.current;
         saveDailySession({
           date: getDailyDate(),
@@ -476,21 +537,41 @@ export default function App() {
 
   // === FINISHED (daily) ===
   if (gameState === "finished" && isDailyChallenge) {
-    return (
-      <DailyResultsScreen
-        date={getDailyDate()}
-        mode={dailyMode}
-        elapsedSeconds={elapsedRef.current}
-        pyramidFound={pyramidFound}
-        foundWords={foundWords}
-        validWords={validWords}
-        grid={grid!}
-        onBack={() => {
-          setIsDailyChallenge(false);
-          initGame(randomSeed(), prevConfigRef.current);
-        }}
-      />
-    );
+    if (isMarathonMode(dailyMode) && marathonResult) {
+      return (
+        <MarathonResultsScreen
+          mode={dailyMode}
+          date={getDailyDate()}
+          result={marathonResult}
+          grids={marathonGrids}
+          validWordsPerGrid={marathonValidWordsPerGrid}
+          onBack={() => {
+            setIsDailyChallenge(false);
+            setMarathonResult(null);
+            setMarathonGrids([]);
+            setMarathonValidWordsPerGrid([]);
+            initGame(randomSeed(), prevConfigRef.current);
+          }}
+        />
+      );
+    }
+    if (isPyramidMode(dailyMode)) {
+      return (
+        <DailyResultsScreen
+          date={getDailyDate()}
+          mode={dailyMode}
+          elapsedSeconds={elapsedRef.current}
+          pyramidFound={pyramidFound}
+          foundWords={foundWords}
+          validWords={validWords}
+          grid={grid!}
+          onBack={() => {
+            setIsDailyChallenge(false);
+            initGame(randomSeed(), prevConfigRef.current);
+          }}
+        />
+      );
+    }
   }
 
   // === FINISHED (normal) ===
@@ -520,6 +601,7 @@ export default function App() {
       <>
         <HomeScreen
           date={getDailyDate()}
+          todayMode={modeForDate(getDailyDate(), getModeOverride())}
           countdown={countdown}
           config={config}
           setConfig={setConfig}
@@ -547,30 +629,46 @@ export default function App() {
   }
 
   // === PLAYING ===
+  const onMarathonResult = (result: MarathonResult) => {
+    setMarathonResult(result);
+    setGameState("finished");
+  };
+
   return (
     <>
-      <PlayingScreen
-        isDailyChallenge={isDailyChallenge}
-        dailyMode={dailyMode}
-        seed={seed}
-        score={score}
-        streak={streak}
-        streakFlash={streakFlash}
-        scoreAnim={scoreAnim}
-        countdown={countdown}
-        foundWords={foundWords}
-        validWords={validWords}
-        pyramidFound={pyramidFound}
-        grid={grid}
-        config={config}
-        elapsed={elapsed}
-        timerKey={timerKey}
-        timerRunning={timerRunning}
-        onConfirmAndStop={confirmAndStop}
-        onNewGame={newGame}
-        onWordSubmit={handleWordSubmit}
-        onEndGame={endGame}
-      />
+      {isDailyChallenge && isMarathonMode(dailyMode) ? (
+        <MarathonGameScreen
+          mode={dailyMode}
+          grids={marathonGrids}
+          validWordsPerGrid={marathonValidWordsPerGrid}
+          onComplete={onMarathonResult}
+          onAbandon={onMarathonResult}
+          onRequestConfirm={(message, onYes) => setConfirmModal({ message, onConfirm: onYes })}
+        />
+      ) : (
+        <PlayingScreen
+          isDailyChallenge={isDailyChallenge}
+          dailyMode={isPyramidMode(dailyMode) ? dailyMode : undefined as never}
+          seed={seed}
+          score={score}
+          streak={streak}
+          streakFlash={streakFlash}
+          scoreAnim={scoreAnim}
+          countdown={countdown}
+          foundWords={foundWords}
+          validWords={validWords}
+          pyramidFound={pyramidFound}
+          grid={grid}
+          config={config}
+          elapsed={elapsed}
+          timerKey={timerKey}
+          timerRunning={timerRunning}
+          onConfirmAndStop={confirmAndStop}
+          onNewGame={newGame}
+          onWordSubmit={handleWordSubmit}
+          onEndGame={endGame}
+        />
+      )}
       {confirmModal && (
         <ConfirmModal
           message={confirmModal.message}

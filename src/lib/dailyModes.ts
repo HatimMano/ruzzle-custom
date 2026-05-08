@@ -26,43 +26,86 @@ export interface DailyModeIntro {
   cta: string
 }
 
-export interface DailyModeRules {
+interface DailyModeBase {
   readonly id: string
   readonly name: string
   readonly subtitle: string
+  readonly palette: DailyModePalette
+  readonly intro?: DailyModeIntro
+}
+
+export interface PyramidMode extends DailyModeBase {
+  readonly kind: 'pyramid'
   readonly size: number
   readonly maxWordLen: number
   readonly pyramidLengths: readonly number[]
   // Nombre minimum de mots requis au niveau plafond (le dernier de pyramidLengths,
   // qui agit comme "≥"). Permet de garantir des alternatives au mot le plus long.
   readonly minWordsAtCap?: number
-  readonly palette: DailyModePalette
-  // Modal d'intro affiché à la première rencontre du mode (skip si absent).
-  readonly intro?: DailyModeIntro
   generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 
-export function pyramidLevelKey(
-  rules: DailyModeRules,
-  word: string
+export interface MarathonMode extends DailyModeBase {
+  readonly kind: 'marathon'
+  readonly size: number
+  readonly maxWordLen: number
+  readonly pyramidLengths: readonly number[]
+  readonly gridCount: number
+  readonly perGridDurationSecs: number
+  generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
+}
+
+export type DailyMode = PyramidMode | MarathonMode
+
+// Alias historique. Les helpers existants (pyramidLevelKey, isPyramidComplete,
+// pyramidRows, levelLabel) ne s'appliquent qu'aux PyramidMode.
+export type DailyModeRules = PyramidMode
+
+export function isPyramidMode(mode: DailyMode): mode is PyramidMode {
+  return mode.kind === 'pyramid'
+}
+
+export function isMarathonMode(mode: DailyMode): mode is MarathonMode {
+  return mode.kind === 'marathon'
+}
+
+// Plafond de scoring du mode (longueur du dernier niveau pyramide).
+export function scoreCap(mode: DailyMode): number {
+  return mode.pyramidLengths[mode.pyramidLengths.length - 1]
+}
+
+// Trouve le créneau pyramide à remplir pour un mot donné.
+// Règle : remplit le plus long créneau encore vide ≤ longueur du mot (cap inclus).
+// Renvoie null si aucun créneau ne peut être rempli (mot trop court ou tous remplis).
+export function pyramidSlotForWord(
+  rules: { pyramidLengths: readonly number[] },
+  word: string,
+  pyramidFound: Record<number, string>
 ): number | null {
   const lens = rules.pyramidLengths
   if (lens.length === 0) return null
   const min = lens[0]
-  const max = lens[lens.length - 1]
   if (word.length < min) return null
-  return Math.min(word.length, max)
+  // Du plus long au plus court, premier créneau ≤ word.length non rempli
+  for (let i = lens.length - 1; i >= 0; i--) {
+    const slot = lens[i]
+    if (slot <= word.length && !pyramidFound[slot]) return slot
+  }
+  return null
 }
 
+// Structurel : marche aussi bien pour PyramidMode que MarathonMode (les deux ont pyramidLengths)
+type PyramidLike = { pyramidLengths: readonly number[] }
+
 export function isPyramidComplete(
-  rules: DailyModeRules,
+  rules: PyramidLike,
   pyramidFound: Record<number, string>
 ): boolean {
   return rules.pyramidLengths.every((l) => !!pyramidFound[l])
 }
 
 export function pyramidLevelsFound(
-  rules: DailyModeRules,
+  rules: PyramidLike,
   pyramidFound: Record<number, string>
 ): number {
   return rules.pyramidLengths.filter((l) => !!pyramidFound[l]).length
@@ -70,14 +113,14 @@ export function pyramidLevelsFound(
 
 // Layout pyramide (sommet en haut). Le 1er level (le plus court) est en bas.
 // L'array de sortie est ordonné top→bottom, items dans chaque rangée gauche→droite.
-export function pyramidRows(rules: DailyModeRules): number[][] {
+export function pyramidRows(rules: PyramidLike): number[][] {
   const reversed = [...rules.pyramidLengths].reverse() // top = max → bottom = min
   const SHAPES: Record<number, number[]> = {
     1: [1],
     2: [1, 1],
     3: [1, 2],
     4: [1, 3],
-    5: [1, 2, 2],
+    5: [2, 3],
     6: [1, 2, 3],
     7: [1, 2, 4],
     8: [1, 3, 4],
@@ -108,7 +151,7 @@ export function pyramidRows(rules: DailyModeRules): number[][] {
 }
 
 // Étiquette de niveau ("3L", "10L+", ...). Le dernier niveau est "≥".
-export function levelLabel(rules: DailyModeRules, len: number): string {
+export function levelLabel(rules: PyramidLike, len: number): string {
   const max = rules.pyramidLengths[rules.pyramidLengths.length - 1]
   if (len === max) return `${len}L+`
   return `${len}L`
@@ -203,6 +246,7 @@ function effectiveSeed(date: string): string {
 }
 
 export const classicMode: DailyModeRules = {
+  kind: 'pyramid',
   id: 'classic',
   name: 'Pyramiddle',
   subtitle: 'Défi du jour · complète la pyramide',
@@ -234,6 +278,7 @@ export const classicMode: DailyModeRules = {
 }
 
 export const bigriddleMode: DailyModeRules = {
+  kind: 'pyramid',
   id: 'bigriddle',
   name: 'BiGriddle',
   subtitle: 'Pyramide étendue · 5×5 · jusqu\'à 10 lettres',
@@ -258,7 +303,6 @@ export const bigriddleMode: DailyModeRules = {
     bullets: [
       'Grille 5×5 au lieu de 4×4',
       'Pyramide étendue : 3L jusqu\'à 10L (8 niveaux)',
-      'Plus de mots, plus de chemins, plus de fun',
     ],
     cta: 'Compris, j\'attaque',
   },
@@ -329,6 +373,7 @@ function generateBirthdayGrid(
 }
 
 export const birthdayMode: DailyModeRules = {
+  kind: 'pyramid',
   id: 'birthday-2026-04-30',
   name: 'Happy 60',
   subtitle: 'Édition spéciale · complète la pyramide',
@@ -351,6 +396,58 @@ export const birthdayMode: DailyModeRules = {
   },
 }
 
+// ─── Marathon : 3 grilles d'affilée ───────────────────────────────────────────
+
+export const marathonMode: MarathonMode = {
+  kind: 'marathon',
+  id: 'marathon',
+  name: 'Marathon',
+  subtitle: '3 grilles · 5 min chacune · pyramide 3→7',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7],
+  gridCount: 3,
+  perGridDurationSecs: 300,
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(239,68,68,0.32) 0%, rgba(249,115,22,0.18) 100%)',
+    cardBorder: '1px solid rgba(239,68,68,0.5)',
+    cardShadow: '0 0 32px rgba(239,68,68,0.18)',
+    accent: '#fb923c',
+    accentSoft: 'rgba(251,146,60,0.7)',
+    slotBg: 'rgba(239,68,68,0.14)',
+    slotBorder: '1px solid rgba(239,68,68,0.3)',
+    buttonBg: 'rgba(239,68,68,0.55)',
+    buttonBorder: '1px solid rgba(239,68,68,0.35)',
+  },
+  intro: {
+    title: 'Marathon',
+    tagline: '3 grilles d\'affilée',
+    bullets: [
+      '3 grilles 4×4 à la suite',
+      'Pyramide 3→7 par grille (15 pts max)',
+      '5 minutes par grille, ensuite ça passe',
+    ],
+    cta: 'C\'est parti',
+  },
+  generate(seed, trie) {
+    const grids: Grid[] = []
+    const validWordsPerGrid: Set<string>[] = []
+    for (let i = 0; i < this.gridCount; i++) {
+      const r = generatePyramidGrid(
+        `${seed}-${i}`,
+        trie,
+        this.size,
+        this.maxWordLen,
+        this.pyramidLengths,
+        1
+      )
+      grids.push(r.grid)
+      validWordsPerGrid.push(r.validWords)
+    }
+    return { grids, validWordsPerGrid }
+  },
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 const SPECIAL_DATES: Record<string, DailyModeRules> = {
@@ -364,7 +461,10 @@ function isSunday(date: string): boolean {
   return d.getUTCDay() === 0
 }
 
-export function modeForDate(date: string): DailyModeRules {
+export function modeForDate(date: string, override?: string | null): DailyMode {
+  if (override === 'marathon') return marathonMode
+  if (override === 'bigriddle') return bigriddleMode
+  if (override === 'classic') return classicMode
   const special = SPECIAL_DATES[date]
   if (special) return special
   if (isSunday(date)) return bigriddleMode

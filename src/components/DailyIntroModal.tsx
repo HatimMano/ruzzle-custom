@@ -1,7 +1,7 @@
-import type { DailyModeRules } from "../lib/dailyModes";
+import type { DailyMode } from "../lib/dailyModes";
 
 interface Props {
-  mode: DailyModeRules;
+  mode: DailyMode;
   onClose: () => void;
 }
 

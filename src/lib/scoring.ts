@@ -8,7 +8,10 @@ export const SCORE_TABLE: Record<number, number> = {
 }
 
 export function scoreForWord(word: string): number {
-  const len = word.length
+  return scoreForLen(word.length)
+}
+
+export function scoreForLen(len: number): number {
   if (len < 3) return 0
   if (len >= 8) return SCORE_TABLE[8]
   return SCORE_TABLE[len] ?? 0

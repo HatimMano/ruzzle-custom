@@ -3,9 +3,9 @@ import { User, History, Play, Trophy } from "lucide-react";
 import { fetchDailyLeaderboard } from "../lib/api";
 import type { LeaderboardEntry } from "../lib/api";
 import {
-  modeForDate,
   pyramidRows,
   levelLabel,
+  type DailyMode,
 } from "../lib/dailyModes";
 import HistoryDrawer from "./HistoryDrawer";
 import LeaderboardDrawer from "./LeaderboardDrawer";
@@ -18,6 +18,7 @@ interface GameConfig {
 
 interface Props {
   date: string;
+  todayMode: DailyMode;
   countdown: number | null;
   config: GameConfig;
   setConfig: (updater: (prev: GameConfig) => GameConfig) => void;
@@ -42,6 +43,7 @@ const MIN_LETTERS = [3, 4, 5, 6, 7] as const;
 
 export default function HomeScreen({
   date,
+  todayMode,
   countdown,
   config,
   setConfig,
@@ -78,7 +80,6 @@ export default function HomeScreen({
     }
   };
 
-  const todayMode = modeForDate(date);
   const { cardBg, cardBorder, cardShadow, accent, accentSoft, slotBg, slotBorder, buttonBg, buttonBorder } = todayMode.palette;
   const isBirthday = todayMode.id === "birthday-2026-04-30";
   const sixties = isBirthday

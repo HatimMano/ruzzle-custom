@@ -33,6 +33,12 @@ export async function setDisplayName(name: string): Promise<void> {
 
 // ─── Daily challenge ─────────────────────────────────────────────────────────
 
+// pyramid_found est jsonb côté DB. Pour les modes pyramide simples : Record<number, string>.
+// Pour marathon : Record<string, Record<number, string>> (clé = index de la grille).
+export type PyramidFoundPayload =
+  | Record<number, string>
+  | Record<string, Record<number, string>>
+
 export interface DailyResultPayload {
   date: string
   mode: string
@@ -41,7 +47,7 @@ export interface DailyResultPayload {
   levelsFound: number
   score: number
   foundWords: string[]
-  pyramidFound: Record<number, string>
+  pyramidFound: PyramidFoundPayload
 }
 
 export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {

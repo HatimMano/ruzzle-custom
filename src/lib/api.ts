@@ -156,21 +156,6 @@ export async function submitGameResult(payload: GameResultPayload): Promise<void
   if (error) console.error('submitGameResult:', error)
 }
 
-// ─── Records — mots les plus longs ────────────────────────────────────────────
-
-export interface LongestWordEntry {
-  display_name: string | null
-  word: string
-  seed: string
-  is_daily: boolean
-}
-
-export async function fetchLongestWords(): Promise<LongestWordEntry[]> {
-  const { data, error } = await supabase.rpc('top_longest_words', { lim: 3 })
-  if (error) { console.error('fetchLongestWords:', error); return [] }
-  return (data ?? []) as LongestWordEntry[]
-}
-
 // ─── Streak leaderboard ────────────────────────────────────────────────────────
 
 export interface StreakEntry {

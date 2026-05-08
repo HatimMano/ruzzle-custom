@@ -285,29 +285,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure handle_new_user();
 
--- ─── Top mots les plus longs (toutes parties + défis) ────────────────────────
-create or replace function top_longest_words(lim int default 5)
-returns table(display_name text, word text, seed text, is_daily boolean)
-language sql security definer as $$
-  select * from (
-    select
-      coalesce(gr.display_name, p.display_name) as display_name,
-      word,
-      gr.seed,
-      false as is_daily
-    from game_results gr
-    left join profiles p on p.id = gr.user_id,
-    lateral unnest(gr.found_words) as word
-    union all
-    select
-      p.display_name as display_name,
-      word,
-      dr.date as seed,
-      true as is_daily
-    from daily_results dr
-    left join profiles p on p.id = dr.user_id,
-    lateral unnest(dr.found_words) as word
-  ) all_words
-  order by length(word) desc, word
-  limit lim;
-$$;
+-- ─── Top mots les plus longs : SUPPRIMÉ
+-- (RPC retiré : fonctionnalité inutile, et un lateral unnest non indexé sur
+--  toute la table aurait mal scalé. Pour rétablir, voir l'historique git.)
+drop function if exists top_longest_words(int);

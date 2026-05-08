@@ -209,7 +209,7 @@ export const classicMode: DailyModeRules = {
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
-  minWordsAtCap: 1,
+  minWordsAtCap: 2,
   palette: {
     cardBg: 'linear-gradient(135deg, rgba(217,119,6,0.3) 0%, rgba(234,179,8,0.1) 100%)',
     cardBorder: '1px solid rgba(217,119,6,0.45)',

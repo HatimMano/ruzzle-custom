@@ -138,11 +138,13 @@ async function main() {
   console.log(`Dico chargé : ${words.length} mots (3-${MAX_LEN}L)\n`)
 
   const PYRAMIDS = [
-    { name: 'classic 3→8',  lengths: [3, 4, 5, 6, 7, 8],  cap: 8 },
-    { name: 'extended 3→9', lengths: [3, 4, 5, 6, 7, 8, 9], cap: 9 },
-    { name: 'extended 3→10', lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10 },
-    { name: 'ext 3→10 + 2×10L', lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, min10: 2 },
-    { name: 'ext 3→10 + 3×10L', lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, min10: 3 },
+    { name: 'classic 3→8',         lengths: [3, 4, 5, 6, 7, 8],  cap: 8 },
+    { name: 'classic 3→8 + 2×8L+', lengths: [3, 4, 5, 6, 7, 8],  cap: 8, minAtCap: 2 },
+    { name: 'classic 3→8 + 3×8L+', lengths: [3, 4, 5, 6, 7, 8],  cap: 8, minAtCap: 3 },
+    { name: 'extended 3→9',        lengths: [3, 4, 5, 6, 7, 8, 9], cap: 9 },
+    { name: 'extended 3→10',       lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10 },
+    { name: 'ext 3→10 + 2×10L',    lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, minAtCap: 2 },
+    { name: 'ext 3→10 + 3×10L',    lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, minAtCap: 3 },
   ]
 
   // Stats par longueur : combien de grilles ont ≥1 mot de cette longueur
@@ -187,9 +189,9 @@ async function main() {
     PYRAMIDS.forEach((p, idx) => {
       const cov = pyramidCoverage(found, p.lengths, p.cap)
       if (!Object.values(cov).every(Boolean)) return
-      if (p.min10) {
-        const c10 = [...found].filter(w => w.length >= 10).length
-        if (c10 < p.min10) return
+      if (p.minAtCap) {
+        const cnt = [...found].filter(w => w.length >= p.cap).length
+        if (cnt < p.minAtCap) return
       }
       pyramidHits[idx]++
     })
@@ -208,9 +210,9 @@ async function main() {
         if (reached.has(idx)) return
         const cov = pyramidCoverage(found, p.lengths, p.cap)
         if (!Object.values(cov).every(Boolean)) return
-        if (p.min10) {
-          const c10 = [...found].filter(w => w.length >= 10).length
-          if (c10 < p.min10) return
+        if (p.minAtCap) {
+          const cnt = [...found].filter(w => w.length >= p.cap).length
+          if (cnt < p.minAtCap) return
         }
         reached.add(idx)
         attemptsToCover[idx].push(attempts)

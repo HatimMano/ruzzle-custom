@@ -401,7 +401,7 @@ export const birthdayMode: DailyModeRules = {
 export const marathonMode: MarathonMode = {
   kind: 'marathon',
   id: 'marathon',
-  name: 'Marathon',
+  name: 'Triddle',
   subtitle: '3 grilles · 5 min chacune · pyramide 3→7',
   size: 4,
   maxWordLen: 10,
@@ -420,7 +420,7 @@ export const marathonMode: MarathonMode = {
     buttonBorder: '1px solid rgba(239,68,68,0.35)',
   },
   intro: {
-    title: 'Marathon',
+    title: 'Triddle',
     tagline: '3 grilles d\'affilée',
     bullets: [
       '3 grilles 4×4 à la suite',
@@ -450,8 +450,10 @@ export const marathonMode: MarathonMode = {
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
-const SPECIAL_DATES: Record<string, DailyModeRules> = {
+const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
+  // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
+  '2026-05-17': marathonMode,
 }
 
 // Dimanche = BiGriddle

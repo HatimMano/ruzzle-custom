@@ -270,6 +270,7 @@ export const marathonMode: MarathonMode = {
 
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
+  '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
 }
 
 function isSunday(date: string): boolean {

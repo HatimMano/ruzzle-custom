@@ -25,6 +25,7 @@ export interface MarathonMode {
   readonly size: number
   readonly maxWordLen: number
   readonly pyramidLengths: readonly number[]
+  readonly minWordsAtCap?: number
   readonly gridCount: number
   readonly perGridDurationSecs: number
   generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
@@ -245,6 +246,7 @@ export const marathonMode: MarathonMode = {
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7],
+  minWordsAtCap: 5,
   gridCount: 3,
   perGridDurationSecs: 300,
   generate(seed, trie) {
@@ -257,7 +259,7 @@ export const marathonMode: MarathonMode = {
         this.size,
         this.maxWordLen,
         this.pyramidLengths,
-        1
+        this.minWordsAtCap ?? 1
       )
       grids.push(r.grid)
       validWordsPerGrid.push(r.validWords)

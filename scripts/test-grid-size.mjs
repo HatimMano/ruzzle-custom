@@ -138,13 +138,11 @@ async function main() {
   console.log(`Dico chargé : ${words.length} mots (3-${MAX_LEN}L)\n`)
 
   const PYRAMIDS = [
-    { name: 'classic 3→8',         lengths: [3, 4, 5, 6, 7, 8],  cap: 8 },
-    { name: 'classic 3→8 + 2×8L+', lengths: [3, 4, 5, 6, 7, 8],  cap: 8, minAtCap: 2 },
-    { name: 'classic 3→8 + 3×8L+', lengths: [3, 4, 5, 6, 7, 8],  cap: 8, minAtCap: 3 },
-    { name: 'extended 3→9',        lengths: [3, 4, 5, 6, 7, 8, 9], cap: 9 },
-    { name: 'extended 3→10',       lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10 },
-    { name: 'ext 3→10 + 2×10L',    lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, minAtCap: 2 },
-    { name: 'ext 3→10 + 3×10L',    lengths: [3, 4, 5, 6, 7, 8, 9, 10], cap: 10, minAtCap: 3 },
+    { name: 'marathon 3→7 (actuel)',  lengths: [3, 4, 5, 6, 7], cap: 7, minAtCap: 1 },
+    { name: 'marathon 3→7 + 2×7L+',   lengths: [3, 4, 5, 6, 7], cap: 7, minAtCap: 2 },
+    { name: 'marathon 3→7 + 3×7L+',   lengths: [3, 4, 5, 6, 7], cap: 7, minAtCap: 3 },
+    { name: 'marathon 3→7 + 5×7L+',   lengths: [3, 4, 5, 6, 7], cap: 7, minAtCap: 5 },
+    { name: 'marathon 3→7 + 7×7L+',   lengths: [3, 4, 5, 6, 7], cap: 7, minAtCap: 7 },
   ]
 
   // Stats par longueur : combien de grilles ont ≥1 mot de cette longueur

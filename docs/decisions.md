@@ -15,6 +15,29 @@ Format type :
 
 ---
 
+## 2026-05-16 — Premier Triddle programmé (override SPECIAL_DATES)
+
+**Trigger** : besoin de tester le mode Marathon en condition réelle (jusqu'ici uniquement accessible via URL override `?mode=marathon`). Choix : renommer en "Triddle" (= Tri + Griddle, plus parlant que "Marathon") et le pousser sur le défi du dimanche 17/05/2026.
+
+**Options envisagées** :
+- a) **Override ponctuel SPECIAL_DATES** (1 date précise) — minimal, observe l'effet sans engagement
+- b) Alterner dimanches pair/impair dans le dispatcher (BiGriddle/Triddle)
+- c) Remplacer définitivement BiGriddle par Triddle le dimanche
+
+**Choix** : a)
+
+**Pourquoi** : premier passage en prod = test. On veut voir si les joueurs s'engagent dans 3 grilles enchaînées avec timer, sans casser leur habitude BiGriddle dominicale. Si engagement OK → b). Si rejet → on n'a sacrifié qu'un dimanche.
+
+**Tradeoffs assumés** :
+- `name` changé sur tous les écrans (intro, carte, header) — mais `id: 'marathon'` conservé en DB pour ne pas casser le typage et faciliter le rollback / migration future
+- Sync requis entre `src/lib/dailyModes.ts` (front) et `supabase/functions/submit_daily/_shared/dailyModes.ts` (edge) sur l'override SPECIAL_DATES. Fait. Si on oublie, l'edge function rejetterait les submits comme `mode_mismatch`.
+
+**À surveiller** :
+- Engagement vs un dimanche BiGriddle classique (taux de complétion, temps moyen, abandons à grille 2 ou 3)
+- Si on étend à b), virer cet override ponctuel (sinon il prend précédence sur la règle d'alternance)
+
+---
+
 ## 2026-05-08 — Anti-cheat via Edge Function Supabase
 
 **Trigger** : le score était calculé côté client et envoyé brut à Supabase. Avec les DevTools, n'importe qui pouvait soumettre `score: 9999` et la DB l'acceptait — la RLS validait juste que `auth.uid() = user_id`, pas la cohérence du score.

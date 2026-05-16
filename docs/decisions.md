@@ -15,6 +15,32 @@ Format type :
 
 ---
 
+## 2026-05-16 — Triddle : `minWordsAtCap=5` (garantir 5 mots de 7L+ par grille)
+
+**Trigger** : test du Triddle sur le dimanche 17/05 (override programmé). Au feedback initial, le mode était jugé "trop dur" — avec un seul mot 7L+ possible par grille, le joueur peut être coincé sur le top de la pyramide sans alternative.
+
+**Options envisagées** :
+- a) **Bump `minWordsAtCap: 5`** → garantit au moins 5 mots de 7L+ par grille
+- b) Élargir la pyramide ou modifier le cap → change la mécanique de scoring
+- c) Refacto plus profond (générer la grille à partir d'un pool prédéfini de mots) → trop d'effort pour un tuning
+
+**Choix** : a)
+
+**Pourquoi** : c'est exactement le paramètre prévu (déjà utilisé pour classic = 2 et bigriddle = 3). Test de faisabilité via `scripts/test-grid-size.mjs` :
+- 5×7L+ sur 4×4 → 34% de grilles passent, médian 3 essais, p90 = 6 (budget MAX_ATTEMPTS_DAILY = 800)
+- Pour 3 grilles (sub-seeds indépendants) : ~18 essais p90 total, OK
+
+**Tradeoffs assumés** :
+- Génération un peu plus lente (~30 ms au lieu de ~10 ms par grille) — imperceptible
+- Si on monte plus haut (7×7L+, 24% de grilles), p90 = 7 essais, encore OK. À garder en tête si futur réglage
+- **Important** : ce changement modifie la grille générée pour la date 2026-05-17 vs ce qui aurait été généré avant ce commit. Si quelqu'un a déjà testé l'URL avant le deploy, il verra une nouvelle grille au prochain refresh. Pas critique car personne n'avait soumis (la date est demain).
+
+**À surveiller** :
+- Feedback joueurs dimanche : 5×7L+ rend-il le mode plus accessible sans trop le simplifier ?
+- Si trop facile → on baisse à 3. Si trop dur encore → on monte à 7.
+
+---
+
 ## 2026-05-16 — Premier Triddle programmé (override SPECIAL_DATES)
 
 **Trigger** : besoin de tester le mode Marathon en condition réelle (jusqu'ici uniquement accessible via URL override `?mode=marathon`). Choix : renommer en "Triddle" (= Tri + Griddle, plus parlant que "Marathon") et le pousser sur le défi du dimanche 17/05/2026.

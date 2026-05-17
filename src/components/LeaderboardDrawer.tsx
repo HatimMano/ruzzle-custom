@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fetchStreakLeaderboard } from "../lib/api";
 import type { LeaderboardEntry, StreakEntry } from "../lib/api";
-import { modeForDate } from "../lib/dailyModes";
+import { modeForDate, isMarathonMode, type DailyMode } from "../lib/dailyModes";
 
 type Tab = 'classement' | 'streaks';
 
@@ -19,6 +19,48 @@ function fmtTime(secs: number) {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+const COLOR_GOLD = "rgba(251,191,36,0.85)"
+const COLOR_GREEN = "rgba(16,185,129,0.75)"
+const COLOR_EMPTY = "rgba(71,85,105,0.3)"
+
+// Strip de progression : pyramide = dots par créneau ; marathon = dot par grille.
+function ProgressStrip({
+  mode,
+  pyramidFound,
+}: {
+  mode: DailyMode;
+  pyramidFound: Record<string, unknown> | null;
+}) {
+  if (isMarathonMode(mode)) {
+    // Marathon : 3 cases, doré si grille complète, vert si partielle, vide sinon
+    const nested = (pyramidFound ?? {}) as Record<string, Record<number, string>>
+    return (
+      <div style={{ display: "flex", gap: "3px" }}>
+        {Array.from({ length: mode.gridCount }, (_, i) => {
+          const gridPyramid = nested[String(i)] ?? {}
+          const filled = mode.pyramidLengths.filter((l) => !!gridPyramid[l]).length
+          const total = mode.pyramidLengths.length
+          const bg = filled === total ? COLOR_GOLD : filled > 0 ? COLOR_GREEN : COLOR_EMPTY
+          return <div key={i} style={{ width: "13px", height: "13px", borderRadius: "3px", background: bg }} />
+        })}
+      </div>
+    )
+  }
+  // Pyramide : 1 dot par créneau, doré si c'est le cap, vert sinon
+  const lens = mode.pyramidLengths
+  const maxLen = lens[lens.length - 1]
+  const flat = (pyramidFound ?? {}) as Record<string, string>
+  return (
+    <div style={{ display: "flex", gap: "3px" }}>
+      {lens.map((l) => {
+        const filled = !!flat[String(l)] || !!flat[l as unknown as string]
+        const bg = filled ? (l === maxLen ? COLOR_GOLD : COLOR_GREEN) : COLOR_EMPTY
+        return <div key={l} style={{ width: "13px", height: "13px", borderRadius: "3px", background: bg }} />
+      })}
+    </div>
+  )
 }
 
 export default function LeaderboardDrawer({
@@ -42,8 +84,7 @@ export default function LeaderboardDrawer({
     }
   };
 
-  const lens = modeForDate(date).pyramidLengths;
-  const maxLen = lens[lens.length - 1];
+  const mode = modeForDate(date);
 
   return (
     <div
@@ -88,11 +129,7 @@ export default function LeaderboardDrawer({
                       {entry.rank <= 3 && <span style={{ fontSize: "0.6rem", color: "#475569" }}>+{4 - entry.rank}</span>}
                     </div>
                     <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
-                    <div style={{ display: "flex", gap: "3px" }}>
-                      {lens.map(l => (
-                        <div key={l} style={{ width: "13px", height: "13px", borderRadius: "3px", background: entry.pyramid_found?.[l] ? l === maxLen ? "rgba(251,191,36,0.85)" : "rgba(16,185,129,0.75)" : "rgba(71,85,105,0.3)" }} />
-                      ))}
-                    </div>
+                    <ProgressStrip mode={mode} pyramidFound={entry.pyramid_found} />
                   </div>
                 </div>
               );

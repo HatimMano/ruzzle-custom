@@ -15,6 +15,38 @@ Format type :
 
 ---
 
+## 2026-05-17 — Extraction ProgressStrip par mode (OCP)
+
+**Trigger** : le rendu du strip de progression dans le classement venait d'être patché avec un `if (isMarathonMode) ... else ...` dans `LeaderboardDrawer.tsx`. Anticipation : à 3-5 modes, le dispatcher devient laid et chaque modif d'un mode oblige à toucher ce gros fichier.
+
+**Options envisagées** :
+- a) **Composant par mode dans un dossier dédié** + dispatch léger dans `ProgressStrip.tsx`
+- b) Convention "metric agnostique" (extraire `completionPercent`, `topLevelReached` du mode et un seul renderer générique) → plus pauvre visuellement, impossible de faire des spécificités par mode
+- c) Mode embarque sa fonction de rendu (`mode.renderLeaderboard()`) → couple game logic et React, et casserait la copie Deno de l'Edge Function
+
+**Choix** : a)
+
+**Pourquoi** :
+- a) suit OCP : ajouter un mode = créer 1 fichier `XxxStrip.tsx` + ajouter un case dans `ProgressStrip.tsx`. Aucun autre fichier ne change.
+- c) écarté car il ferait fuiter React dans `dailyModes.ts` (le module qui doit rester pur pour la copie Deno côté Edge Function)
+- b) écarté car le user vient de demander un rendu différent pour Triddle → on veut explicitement de la liberté visuelle par mode
+
+**Structure** :
+```
+src/components/leaderboard/
+├── ProgressStrip.tsx   — dispatcher (branche sur mode.kind)
+├── PyramidStrip.tsx    — pour PyramidMode (1 dot/créneau, doré au cap)
+└── MarathonStrip.tsx   — pour MarathonMode (1 dot/grille, doré si complète)
+```
+
+**Tradeoffs assumés** :
+- 3 fichiers pour ~70 lignes au lieu d'un `if/else` inline. Acceptable, c'est la lisibilité long-terme.
+- Le dispatcher est toujours un `if/else if`. Pas grave : c'est UN endroit, court, explicite.
+
+**À surveiller** : si un jour on veut afficher le `ProgressStrip` dans d'autres contextes (ex: `MarathonResultsScreen` → tab Classement), les composants sont déjà importables tels quels. Le dispatcher fait le bon choix automatiquement.
+
+---
+
 ## 2026-05-16 — Triddle : `minWordsAtCap=5` (garantir 5 mots de 7L+ par grille)
 
 **Trigger** : test du Triddle sur le dimanche 17/05 (override programmé). Au feedback initial, le mode était jugé "trop dur" — avec un seul mot 7L+ possible par grille, le joueur peut être coincé sur le top de la pyramide sans alternative.

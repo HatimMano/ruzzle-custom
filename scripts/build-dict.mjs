@@ -89,7 +89,10 @@ console.log(`Lignes brutes : ${lines.length}`)
 // Idée : si un verbe/nom est connu (au moins une forme dépasse FREQ_MIN), on accepte
 // toutes ses formes fléchies — y compris les conjugaisons rares (passé simple,
 // subjonctif imparfait...) qu'un filtre par forme exclurait.
+// Bonus : on trace les lemmes verbaux (cgram=VER) pour bypass total côté Passe 2 + GLAFF.
 const lemmeMaxFreq = new Map()
+const verbLemmes = new Set()       // lemmes normalisés (sans accents) dont cgram === 'VER' (infinitifs)
+const verbalOrthos = new Set()     // orthos normalisés observés avec cgram === 'VER' (formes : "soulant", "soulé", ...)
 const rows = []
 
 for (let i = 1; i < lines.length; i++) {
@@ -111,22 +114,47 @@ for (let i = 1; i < lines.length; i++) {
     // Important : un mot comme "cation" ou "ria" a freqlivres=0 mais est un lemme légitime.
     const prev = lemmeMaxFreq.get(lemme) ?? -1
     if (freqlivres > prev) lemmeMaxFreq.set(lemme, freqlivres)
+    if (cgram === 'VER') verbLemmes.add(removeAccents(lemme).toLowerCase())
+  }
+  if (cgram === 'VER') {
+    // L'ortho (forme fléchie) est utile aussi : ça permet de détecter qu'un mot
+    // type "soulant" est une forme verbale, ce qui justifie de bypass les adjectifs
+    // dérivés (ex: "soulante" = ADJ lemme=soulant → reconnu comme verbal participle).
+    verbalOrthos.add(removeAccents(ortho).toLowerCase())
   }
 }
+
+console.log(`Lemmes verbaux détectés : ${verbLemmes.size}`)
+console.log(`Orthos verbales détectées : ${verbalOrthos.size}`)
 
 // Passe 2 : filtrage par seuil de fréquence dégressif selon la longueur.
 // Pour les mots courts (≤5L), on accepte tout ce qui a un lemme répertorié
 // dans Lexique (même freq=0) — sinon on perd "ria", "cation", etc.
+// Bypass verbe : toute conjugaison d'un verbe Lexique passe sans condition de fréquence
+// (résout les trous récurrents type "soulante", "citait", "relogeas"...).
 const words = new Set()
+const verbForms = new Set()  // formes ajoutées via bypass verbe, à protéger du filtre rétroactif
 let keptShort = 0
 let keptByOwnFreq = 0
 let keptByLemmeFreq = 0
+let keptVerbBypass = 0
 
-for (const { ortho, lemme, freqlivres } of rows) {
+for (const { ortho, cgram, lemme, freqlivres } of rows) {
   const normalized = removeAccents(ortho).toLowerCase()
   if (!VALID_CHARS.test(normalized)) continue
   if (BLOCKLIST.has(normalized)) continue
   if (words.has(normalized)) continue
+
+  // BYPASS VERBE : forme VER directe, OU forme ADJ/NOM dont le lemme est lui-même
+  // un participe verbal (ex: "soulante" = ADJ lemme=soulant ; "soulant" est aussi VER).
+  const lemmeNormForm = lemme ? removeAccents(lemme).toLowerCase() : ''
+  const isVerbForm = cgram === 'VER' || (lemmeNormForm && verbalOrthos.has(lemmeNormForm))
+  if (isVerbForm) {
+    words.add(normalized)
+    verbForms.add(normalized)
+    keptVerbBypass++
+    continue
+  }
 
   const threshold = freqThresholdForLength(normalized.length)
   const lemmePresent = !!lemme && lemmeMaxFreq.has(lemme)
@@ -151,6 +179,7 @@ for (const { ortho, lemme, freqlivres } of rows) {
 console.log(`Mots Lexique courts (≤5L, lemme connu) : ${keptShort}`)
 console.log(`Mots Lexique gardés par fréquence directe : ${keptByOwnFreq}`)
 console.log(`Mots Lexique gardés via lemme connu : ${keptByLemmeFreq}`)
+console.log(`Mots Lexique gardés via bypass verbe : ${keptVerbBypass}`)
 
 // ─── GLAFF : couverture exhaustive des formes fléchies ─────────────────────
 // Format : forme|tag_morpho|lemme|phon1|phon2|freq_corpus_1|...
@@ -188,6 +217,7 @@ for (const [lemme, freq] of lemmeMaxFreq) {
 }
 
 let glaffAdded = 0
+let glaffAddedVerbBypass = 0
 let glaffRejectedUnknownLemme = 0
 let glaffRejectedFreq = 0
 let glaffLines = 0
@@ -210,8 +240,16 @@ for (const line of glaffLines_arr) {
 
   const lemmeNorm = removeAccents(lemme).toLowerCase()
   if (!lemmeNormFreq.has(lemmeNorm)) { glaffRejectedUnknownLemme++; continue }
-  const lemmeFreq = lemmeNormFreq.get(lemmeNorm)
 
+  // BYPASS VERBE : lemme = verbe (infinitif), OU lemme = participe verbal (ortho VER).
+  if (verbLemmes.has(lemmeNorm) || verbalOrthos.has(lemmeNorm)) {
+    words.add(formeNorm)
+    verbForms.add(formeNorm)
+    glaffAddedVerbBypass++
+    continue
+  }
+
+  const lemmeFreq = lemmeNormFreq.get(lemmeNorm)
   const threshold = freqThresholdForLength(formeNorm.length)
   if (lemmeFreq < threshold) { glaffRejectedFreq++; continue }
 
@@ -220,15 +258,18 @@ for (const line of glaffLines_arr) {
 }
 
 console.log(`GLAFF lignes lues : ${glaffLines}`)
-console.log(`GLAFF formes ajoutées : ${glaffAdded}`)
+console.log(`GLAFF formes ajoutées (filtre fréquence) : ${glaffAdded}`)
+console.log(`GLAFF formes ajoutées (bypass verbe) : ${glaffAddedVerbBypass}`)
 console.log(`GLAFF rejetées (lemme inconnu de Lexique) : ${glaffRejectedUnknownLemme}`)
 console.log(`GLAFF rejetées (fréquence < seuil pour cette longueur) : ${glaffRejectedFreq}`)
 
 // Filtre rétroactif : appliquer le seuil dégressif aussi aux mots Lexique
 // (pour cohérence : on ne veut pas un mot rare 8L qui passait par freqlivres=0.02)
+// Les formes verbales (bypass) sont protégées — elles sont toujours acceptées.
 const before = words.size
 let removed = 0
 for (const w of [...words]) {
+  if (verbForms.has(w)) continue  // forme verbale, protégée du filtre rétroactif
   const threshold = freqThresholdForLength(w.length)
   if (threshold <= FREQ_MIN) continue
   // chercher un lemme normalisé qui matche ce mot ou qui est préfixe

@@ -15,6 +15,40 @@ Format type :
 
 ---
 
+## 2026-05-21 — Whitelist conjugaisons verbales dans le dico
+
+**Trigger** : trous récurrents (notait, citait, soulantes, etc.). Cause racine systémique : filtre par fréquence-lemme trop strict sur les formes ≥8L. ~1 plainte tous les 1-2 jours, bloquant avant industrialisation.
+
+**Options envisagées** :
+- a) Abaisser le seuil 8-10L de 1.0 à 0.5 — fix partiel, ~5-10% du gap résolu
+- b) **Whitelist conjugaisons verbales** — toute forme de lemme VER acceptée
+- c) Changer de source (Wiktionnaire brut, Reverso) — refacto majeur
+
+**Choix** : b)
+
+**Pourquoi** : résout 80%+ des cas (les verbes sont la majorité des plaintes). Reste léger (~30 lignes ajoutées dans `scripts/build-dict.mjs`). Risque de faux positifs limité car cgram=VER est curé par Lexique383.
+
+**Implémentation** :
+- Set `verbLemmes` : lemmes normalisés où cgram=VER (= infinitifs)
+- Set `verbalOrthos` : orthos normalisés observés avec cgram=VER (= participes/conjugaisons)
+- Passe 2 (Lexique) : bypass si forme=VER, OU si forme=ADJ/NOM mais lemme ∈ verbalOrthos (= adjectif verbal)
+- Passe GLAFF : bypass si lemme ∈ (verbLemmes ∪ verbalOrthos)
+- Filtre rétroactif : protège les `verbForms` du purge fréquence
+
+**Résultat** : dico 87k → 153k mots (+76%). Tous les cas du backlog résolus sauf "soulantes" (absent des sources Lexique+GLAFF, pas un problème de filtre).
+
+**Tradeoffs** :
+- Dico passe de ~600 KB à ~1.3 MB (gzipped ~250 KB → ~400 KB). Bundle dico +66%, négligeable au regard du gain.
+- Edge Function : **redeploy obligatoire** après chaque rebuild du dico (sinon les isolates Deno chauds gardent l'ancien dico en mémoire et rejettent les nouveaux mots).
+
+**À surveiller** :
+- Faux positifs verbes archaïques/régionaux qui pollueraient — surveiller plaintes joueurs ("ce mot existe pas !")
+- Si la sample manuelle révèle des trucs zarbis : ajouter un seuil-lemme minimum (ex: ≥ 0.1) sur le bypass pour filtrer les verbes hyperrares
+
+**Procédure de déploiement obligatoire** : `node scripts/build-dict.mjs` → vérif manuelle sample → `git push` + `vercel --prod --yes` (front) + `supabase functions deploy submit_daily` (edge). Skipper le dernier step = désynchro silencieuse.
+
+---
+
 ## 2026-05-17 — Extraction ProgressStrip par mode (OCP)
 
 **Trigger** : le rendu du strip de progression dans le classement venait d'être patché avec un `if (isMarathonMode) ... else ...` dans `LeaderboardDrawer.tsx`. Anticipation : à 3-5 modes, le dispatcher devient laid et chaque modif d'un mode oblige à toucher ce gros fichier.

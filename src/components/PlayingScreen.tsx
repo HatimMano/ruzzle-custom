@@ -101,19 +101,21 @@ export default function PlayingScreen({
             <X size={13} />
             Quit
           </button>
-          <button
-            onClick={onNewGame}
-            style={{
-              display: "flex", alignItems: "center", gap: "0.3rem",
-              padding: "0.45rem 0.75rem", borderRadius: "0.75rem",
-              background: "rgba(30,41,59,0.9)",
-              border: "1px solid rgba(71,85,105,0.4)",
-              color: "#94a3b8", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            <RefreshCw size={13} />
-            New
-          </button>
+          {!isDailyChallenge && (
+            <button
+              onClick={onNewGame}
+              style={{
+                display: "flex", alignItems: "center", gap: "0.3rem",
+                padding: "0.45rem 0.75rem", borderRadius: "0.75rem",
+                background: "rgba(30,41,59,0.9)",
+                border: "1px solid rgba(71,85,105,0.4)",
+                color: "#94a3b8", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              <RefreshCw size={13} />
+              New
+            </button>
+          )}
         </div>
       </div>
 

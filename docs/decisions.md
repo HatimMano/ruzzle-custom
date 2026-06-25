@@ -15,6 +15,44 @@ Format type :
 
 ---
 
+## 2026-06-25 — Classement cumul/mensuel + record du mode sur l'accueil
+
+**Trigger** : besoin d'un vrai leaderboard pour engager les joueurs (au-delà du classement du jour). Le user voulait aussi un "record du défi" affiché sur l'accueil pour donner un challenge psychologique (battre HatimIL).
+
+**Options envisagées** (stockage classement cumul) :
+- a) **RPC PostgreSQL** (`function top_aggregated_players`) — agrégation à la demande, zero maintenance
+- b) Materialized view + refresh planifié — plus rapide en lecture mais stale + complexité
+- c) Table dédiée + triggers — rapidissime mais triggers complexes, rebuild si delete (cas déjà vécu)
+- d) Calcul côté client — ne scale pas, sale
+
+**Choix** : a) RPC PostgreSQL.
+
+**Pourquoi** :
+- Volume actuel : <10k lignes daily_results. Rank() over partition + group by reste <100ms.
+- Zero maintenance : pas de refresh à planifier, pas de triggers à débugger sur delete.
+- Test de scalabilité : à 1M lignes, encore acceptable (~1s, qui peut être amélioré via index si besoin).
+- Si jamais on atteint vraiment des limites de perf, on pourra passer à b) ou c) sans changer le contrat de l'API client.
+
+**Tradeoffs** :
+- 1 RPC à maintenir dans le SQL (déployé manuellement via SQL Editor — MCP read-only)
+- Filtre temporel par préfixe `date like 'YYYY-MM-%'` : pas optimal pour très gros volumes, mais simple. Index sur `date` à ajouter si besoin futur.
+
+**Système de points** : 3pts top1, 2pts top2, 1pt top3 par (date, mode). `rank()` avec tiebreaker `created_at` → premier qui finit gagne, jamais d'ex-aequo silencieux.
+
+**Filtrage mode** : tous modes confondus (Classic + BiGriddle + Triddle agrégés). Justification : sinon les classements deviennent trop fragmentés et les nouveaux modes (peu de tirages) ne génèrent pas de points significatifs.
+
+**UI** : 2 onglets seulement (Jour + Classement), onglet Séries supprimé (peu utilisé). Sous-toggle Cumul / Ce mois sur Classement. Format compact : `1. HatimIL  8pts  2/1/0  23j`.
+
+**Record sur l'accueil** : `fetchModeRecord(mode.id)` = `SELECT` direct avec ORDER BY elapsed_secs ASC LIMIT 1 sur les défis complétés du mode. Mis à jour à chaque rendu de HomeScreen (todayMode.id change quand on bascule de jour).
+
+**À surveiller** :
+- Si nombre de joueurs explose (>1k), monitorer latence du RPC. Plan B : index sur `daily_results(date, mode, score DESC)`.
+- Le tiebreaker `created_at` repose sur le moment de l'INSERT côté Edge Function. Si le réseau du joueur lague et qu'il submit 30s après avoir vraiment fini, il perd l'égalité. Acceptable.
+
+**À ne pas oublier** : appliquer `supabase_migration_leaderboard.sql` dans le SQL Editor avant que l'onglet Classement marche en prod. Sans la fonction RPC, l'appel échoue silencieusement et affiche "Aucun classement encore".
+
+---
+
 ## 2026-05-21 — Whitelist conjugaisons verbales dans le dico
 
 **Trigger** : trous récurrents (notait, citait, soulantes, etc.). Cause racine systémique : filtre par fréquence-lemme trop strict sur les formes ≥8L. ~1 plainte tous les 1-2 jours, bloquant avant industrialisation.

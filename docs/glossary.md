@@ -64,6 +64,9 @@ Un des principes SOLID. Le code doit être ouvert à l'extension (ajouter du nou
 ## PRNG (Pseudo-Random Number Generator)
 Générateur "aléatoire" mais déterministe. À partir d'une seed (graine), produit toujours la même séquence de nombres. Utile pour : tests reproductibles, jeux où tout le monde voit la même grille, debugging. On utilise **mulberry32** : très rapide, bonne qualité statistique, 7 lignes de code.
 
+## RPC (Remote Procedure Call) — côté Supabase
+Mécanisme pour appeler une fonction SQL Postgres depuis le client JS. `supabase.rpc('function_name', { arg1: ... })` exécute la function côté DB et renvoie le résultat. On l'utilise pour `top_aggregated_players` (classement cumul) — plus efficace que de tout télécharger côté client pour agréger.
+
 ## RLS (Row Level Security)
 Mécanisme PostgreSQL où chaque ligne d'une table peut avoir des règles d'accès. Au lieu de `GRANT SELECT ON table` global, on dit "le user X peut voir SES lignes uniquement". Côté Supabase, c'est le mécanisme principal de sécurité — sans RLS bien configurée, n'importe qui peut lire/modifier n'importe quelle donnée.
 

@@ -35,6 +35,9 @@ export default function LeaderboardDrawer({
 }: Props) {
   const [tab, setTab] = useState<Tab>('jour');
   const [period, setPeriod] = useState<Period>('cumul');
+  const [classementSeen, setClassementSeen] = useState<boolean>(
+    () => localStorage.getItem('griddle:seen_classement_v1') === '1'
+  );
   const [aggregate, setAggregate] = useState<AggregateLeaderboardEntry[]>([]);
   const [aggregateLoading, setAggregateLoading] = useState(false);
   const [aggregateCache, setAggregateCache] = useState<Record<Period, AggregateLeaderboardEntry[] | null>>({
@@ -77,15 +80,37 @@ export default function LeaderboardDrawer({
 
         {/* Onglets principaux */}
         <div style={{ display: "flex", background: "rgba(30,41,59,0.9)", borderRadius: "999px", padding: "0.25rem", gap: "0.25rem" }}>
-          {([['jour', '🏆 Jour'], ['classement', '⭐ Classement']] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              style={{ flex: 1, padding: "0.5rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", border: "none", background: tab === id ? "white" : "transparent", color: tab === id ? "#0f172a" : "#64748b", transition: "all 0.15s" }}
-            >
-              {label}
-            </button>
-          ))}
+          {([['jour', '🏆 Jour'], ['classement', '⭐ Classement']] as const).map(([id, label]) => {
+            const showBadge = id === 'classement' && !classementSeen;
+            return (
+              <button
+                key={id}
+                onClick={() => {
+                  setTab(id);
+                  if (id === 'classement' && !classementSeen) {
+                    localStorage.setItem('griddle:seen_classement_v1', '1');
+                    setClassementSeen(true);
+                  }
+                }}
+                style={{ position: 'relative', flex: 1, padding: "0.5rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", border: "none", background: tab === id ? "white" : "transparent", color: tab === id ? "#0f172a" : "#64748b", transition: "all 0.15s" }}
+              >
+                {label}
+                {showBadge && (
+                  <span style={{
+                    position: 'absolute', top: 2, right: 8,
+                    background: '#ef4444',
+                    color: 'white',
+                    fontSize: '0.5rem',
+                    fontWeight: 800,
+                    padding: '0.1rem 0.35rem',
+                    borderRadius: '999px',
+                    letterSpacing: '0.04em',
+                    boxShadow: '0 0 8px rgba(239,68,68,0.6)',
+                  }}>NEW</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Sous-toggle Cumul / Mois (uniquement onglet Classement) */}

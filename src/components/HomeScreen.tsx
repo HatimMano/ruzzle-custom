@@ -61,6 +61,9 @@ export default function HomeScreen({
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [modeRecord, setModeRecord] = useState<ModeRecord | null>(null);
+  const [showUrlBanner, setShowUrlBanner] = useState<boolean>(
+    () => localStorage.getItem('griddle:url_banner_v1_dismissed') !== '1'
+  );
 
   useEffect(() => {
     fetchModeRecord(todayMode.id).then(setModeRecord);
@@ -235,6 +238,47 @@ export default function HomeScreen({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
 
+            {/* Banner migration URL — affichage discret, dismissable */}
+            {showUrlBanner && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "0.5rem",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "0.75rem",
+                background: "rgba(59,130,246,0.1)",
+                border: "1px solid rgba(59,130,246,0.3)",
+                fontSize: "0.7rem",
+                lineHeight: 1.35,
+                color: "#dbeafe",
+              }}>
+                <span style={{ flexShrink: 0, fontSize: "0.9rem" }}>🔄</span>
+                <span style={{ flex: 1 }}>
+                  Nouvelle adresse :{" "}
+                  <span style={{ color: "white", fontWeight: 700 }}>playgriddle.vercel.app</span>
+                  {" "}— pense à mettre à jour ton signet.
+                </span>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('griddle:url_banner_v1_dismissed', '1');
+                    setShowUrlBanner(false);
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    background: "transparent",
+                    border: "1px solid rgba(59,130,246,0.4)",
+                    color: "#dbeafe",
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    padding: "0.25rem 0.6rem",
+                    borderRadius: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  Compris
+                </button>
+              </div>
+            )}
+
+
             {/* Carte Défi du jour */}
             <div
               style={{
@@ -278,15 +322,15 @@ export default function HomeScreen({
                     fontSize: "0.7rem", fontWeight: 600,
                     color: accentSoft, opacity: 0.85,
                     marginBottom: "0.9rem",
-                    display: "flex", alignItems: "center", gap: "0.3rem",
+                    display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap",
                   }}>
                     <span>🏆</span>
-                    <span>Record :</span>
-                    <span style={{ color: "white", fontVariantNumeric: "tabular-nums" }}>
+                    <span>Meilleur temps</span>
+                    <span style={{ color: "white", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
                       {fmtRecordTime(modeRecord.elapsed_secs)}
                     </span>
-                    <span>·</span>
-                    <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span>par</span>
+                    <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>
                       {modeRecord.display_name ?? 'Anonyme'}
                     </span>
                   </p>

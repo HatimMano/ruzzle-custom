@@ -158,6 +158,39 @@ export async function fetchAggregateLeaderboard(
   }))
 }
 
+// ─── Mes stats agrégées (pour la section "Vous" du classement) ───────────────
+
+export interface MyAggregateStats {
+  rank: number | null  // null si pas encore classé (0 podium)
+  points: number
+  top1: number
+  top2: number
+  top3: number
+  total_played: number
+  total_ranked: number  // nombre total de joueurs avec ≥ 1 podium
+}
+
+export async function fetchMyAggregateStats(yearMonth: string | null = null): Promise<MyAggregateStats | null> {
+  const myId = await getUserId()
+  if (!myId) return null
+  const { data, error } = await supabase.rpc('my_aggregate_stats', {
+    my_id: myId,
+    year_month: yearMonth,
+  })
+  if (error) { console.error('fetchMyAggregateStats:', error); return null }
+  const row = (data as MyAggregateStats[] | null)?.[0]
+  if (!row) return null
+  return {
+    rank: row.rank ?? null,
+    points: row.points ?? 0,
+    top1: row.top1 ?? 0,
+    top2: row.top2 ?? 0,
+    top3: row.top3 ?? 0,
+    total_played: row.total_played ?? 0,
+    total_ranked: row.total_ranked ?? 0,
+  }
+}
+
 // ─── Record d'un mode (pour la carte d'accueil) ──────────────────────────────
 
 export interface ModeRecord {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchAggregateLeaderboard } from "../lib/api";
-import type { LeaderboardEntry, AggregateLeaderboardEntry } from "../lib/api";
+import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats } from "../lib/api";
+import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats } from "../lib/api";
 import { modeForDate, isMarathonMode, isPyramidMode } from "../lib/dailyModes";
 import { getTrie } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
@@ -46,24 +46,40 @@ export default function LeaderboardDrawer({
     cumul: null,
     mois: null,
   });
+  const [myStats, setMyStats] = useState<MyAggregateStats | null>(null);
+  const [myStatsCache, setMyStatsCache] = useState<Record<Period, MyAggregateStats | null>>({
+    cumul: null,
+    mois: null,
+  });
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
 
   const loadAggregate = (p: Period) => {
-    if (aggregateCache[p]) {
-      setAggregate(aggregateCache[p]!);
-      return;
+    if (aggregateCache[p]) setAggregate(aggregateCache[p]!);
+    else {
+      setAggregateLoading(true);
+      const yearMonth = p === 'mois' ? currentYearMonth() : null;
+      fetchAggregateLeaderboard(yearMonth, 10)
+        .then((rows) => {
+          setAggregate(rows);
+          setAggregateCache((prev) => ({ ...prev, [p]: rows }));
+        })
+        .finally(() => setAggregateLoading(false));
     }
-    setAggregateLoading(true);
-    const yearMonth = p === 'mois' ? currentYearMonth() : null;
-    fetchAggregateLeaderboard(yearMonth, 10)
-      .then((rows) => {
-        setAggregate(rows);
-        setAggregateCache((prev) => ({ ...prev, [p]: rows }));
-      })
-      .finally(() => setAggregateLoading(false));
+    if (myStatsCache[p]) setMyStats(myStatsCache[p]);
+    else {
+      const yearMonth = p === 'mois' ? currentYearMonth() : null;
+      fetchMyAggregateStats(yearMonth).then((stats) => {
+        setMyStats(stats);
+        setMyStatsCache((prev) => ({ ...prev, [p]: stats }));
+      });
+    }
   };
 
   useEffect(() => {
-    if (tab === 'classement') loadAggregate(period);
+    if (tab === 'classement') {
+      loadAggregate(period);
+      if (!playerStats) fetchMyStats().then(setPlayerStats);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, period]);
 
@@ -190,6 +206,51 @@ export default function LeaderboardDrawer({
 
           {/* ─── Onglet CLASSEMENT (cumul ou mois) ───────────────── */}
           {tab === 'classement' && (<>
+
+            {/* Section "Vous" — toujours visible en haut du Classement */}
+            <div style={{
+              borderRadius: "0.875rem",
+              background: "rgba(217,119,6,0.08)",
+              border: "1px solid rgba(217,119,6,0.25)",
+              padding: "0.6rem 0.85rem",
+              display: "flex", flexDirection: "column", gap: "0.25rem",
+              marginBottom: "0.5rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#fbbf24", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  👤 Vous
+                </span>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>
+                  {myStats && myStats.rank
+                    ? <>#{myStats.rank} <span style={{ color: "#64748b", fontWeight: 500 }}>/ {myStats.total_ranked}</span></>
+                    : myStats && myStats.total_played > 0
+                      ? <span style={{ color: "#64748b" }}>Pas encore classé</span>
+                      : <span style={{ color: "#475569" }}>Aucun défi joué</span>}
+                </span>
+              </div>
+              {myStats && myStats.total_played > 0 && (
+                <div style={{
+                  display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.5rem",
+                  fontSize: "0.7rem", color: "#94a3b8", fontVariantNumeric: "tabular-nums",
+                }}>
+                  <span>
+                    <span style={{ color: "white", fontWeight: 700, fontSize: "0.85rem" }}>{myStats.points}</span>
+                    <span style={{ color: "#64748b" }}> pts</span>
+                  </span>
+                  <span>
+                    {myStats.top1}<span style={{ color: "#475569" }}>/</span>{myStats.top2}<span style={{ color: "#475569" }}>/</span>{myStats.top3}
+                  </span>
+                  <span>{myStats.total_played} défis</span>
+                  {playerStats?.best_daily_streak ? (
+                    <span>🔥 {playerStats.best_daily_streak}j</span>
+                  ) : null}
+                  {playerStats?.fastest_complete_secs ? (
+                    <span>⚡ {fmtTime(playerStats.fastest_complete_secs)}</span>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
             {aggregateLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
             {!aggregateLoading && aggregate.length === 0 && (
               <p className="text-slate-600 text-sm text-center py-6">

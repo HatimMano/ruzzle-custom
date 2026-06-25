@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { User, History, Play, Trophy } from "lucide-react";
-import { fetchDailyLeaderboard, fetchModeRecord } from "../lib/api";
+import { fetchDailyLeaderboard, fetchDailyRecord } from "../lib/api";
 import type { LeaderboardEntry, ModeRecord } from "../lib/api";
 import {
   pyramidRows,
@@ -63,8 +63,8 @@ export default function HomeScreen({
   const [modeRecord, setModeRecord] = useState<ModeRecord | null>(null);
 
   useEffect(() => {
-    fetchModeRecord(todayMode.id).then(setModeRecord);
-  }, [todayMode.id]);
+    fetchDailyRecord(date, todayMode.id).then(setModeRecord);
+  }, [date, todayMode.id]);
 
   const fmtRecordTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -175,7 +175,9 @@ export default function HomeScreen({
               </span>
             </button>
             <button
-              onClick={handleOpenLeaderboard}
+              onClick={dailyPlayedToday ? handleOpenLeaderboard : undefined}
+              disabled={!dailyPlayedToday}
+              title={dailyPlayedToday ? '' : 'Joue le défi du jour pour débloquer le classement'}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -184,9 +186,11 @@ export default function HomeScreen({
                 height: "2.6rem",
                 borderRadius: "0.875rem",
                 background: "rgba(30,41,59,0.9)",
-                border: "1px solid rgba(71,85,105,0.5)",
-                color: "#fbbf24",
-                cursor: "pointer",
+                border: dailyPlayedToday ? "1px solid rgba(71,85,105,0.5)" : "1px solid rgba(71,85,105,0.2)",
+                color: dailyPlayedToday ? "#fbbf24" : "#475569",
+                cursor: dailyPlayedToday ? "pointer" : "not-allowed",
+                opacity: dailyPlayedToday ? 1 : 0.5,
+                transition: "all 0.15s",
               }}
             >
               <Trophy size={17} />
@@ -282,7 +286,7 @@ export default function HomeScreen({
                     display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap",
                   }}>
                     <span>🏆</span>
-                    <span>Meilleur temps</span>
+                    <span>Record du jour</span>
                     <span style={{ color: "white", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
                       {fmtRecordTime(modeRecord.elapsed_secs)}
                     </span>

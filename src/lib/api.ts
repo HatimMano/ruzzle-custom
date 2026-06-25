@@ -166,7 +166,7 @@ export interface ModeRecord {
   date: string
 }
 
-// Renvoie le record (temps le plus rapide, défi complété) pour un mode donné.
+// Renvoie le record (temps le plus rapide, défi complété) pour un mode donné, all-time.
 export async function fetchModeRecord(modeId: string): Promise<ModeRecord | null> {
   const { data, error } = await supabase
     .from('daily_results')
@@ -178,6 +178,28 @@ export async function fetchModeRecord(modeId: string): Promise<ModeRecord | null
     .limit(1)
     .maybeSingle()
   if (error) { console.error('fetchModeRecord:', error); return null }
+  if (!data) return null
+  return {
+    display_name: (data.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
+    elapsed_secs: data.elapsed_secs,
+    date: data.date,
+  }
+}
+
+// Renvoie le record du défi du JOUR (date + mode précis). Si personne n'a complété
+// encore aujourd'hui, renvoie null.
+export async function fetchDailyRecord(date: string, modeId: string): Promise<ModeRecord | null> {
+  const { data, error } = await supabase
+    .from('daily_results')
+    .select('elapsed_secs, date, profiles(display_name)')
+    .eq('date', date)
+    .eq('mode', modeId)
+    .eq('completed', true)
+    .order('elapsed_secs', { ascending: true })
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) { console.error('fetchDailyRecord:', error); return null }
   if (!data) return null
   return {
     display_name: (data.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,

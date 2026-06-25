@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { User, History, Play, Trophy } from "lucide-react";
-import { fetchDailyLeaderboard } from "../lib/api";
-import type { LeaderboardEntry } from "../lib/api";
+import { fetchDailyLeaderboard, fetchModeRecord } from "../lib/api";
+import type { LeaderboardEntry, ModeRecord } from "../lib/api";
 import {
   pyramidRows,
   levelLabel,
@@ -60,6 +60,17 @@ export default function HomeScreen({
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [modeRecord, setModeRecord] = useState<ModeRecord | null>(null);
+
+  useEffect(() => {
+    fetchModeRecord(todayMode.id).then(setModeRecord);
+  }, [todayMode.id]);
+
+  const fmtRecordTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
+  };
 
   const selectedDuration =
     config.duration === 0
@@ -259,9 +270,27 @@ export default function HomeScreen({
                 <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
                   {todayMode.name.toUpperCase()}
                 </p>
-                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: "1rem" }}>
+                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: modeRecord ? "0.5rem" : "1rem" }}>
                   {todayMode.subtitle}
                 </p>
+                {modeRecord && (
+                  <p style={{
+                    fontSize: "0.7rem", fontWeight: 600,
+                    color: accentSoft, opacity: 0.85,
+                    marginBottom: "0.9rem",
+                    display: "flex", alignItems: "center", gap: "0.3rem",
+                  }}>
+                    <span>🏆</span>
+                    <span>Record :</span>
+                    <span style={{ color: "white", fontVariantNumeric: "tabular-nums" }}>
+                      {fmtRecordTime(modeRecord.elapsed_secs)}
+                    </span>
+                    <span>·</span>
+                    <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {modeRecord.display_name ?? 'Anonyme'}
+                    </span>
+                  </p>
+                )}
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
                   {pyramidRows(todayMode).map((row, ri) => (
                     <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>
@@ -394,7 +423,6 @@ export default function HomeScreen({
             date={date}
             leaderboard={leaderboard}
             leaderboardLoading={leaderboardLoading}
-            initialStreaks={[]}
             onClose={() => setShowLeaderboard(false)}
           />
         )}

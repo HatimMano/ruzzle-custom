@@ -95,6 +95,7 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
     .eq('date', date)
     .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
+    .order('created_at', { ascending: true })  // tiebreaker : premier qui finit gagne
     .limit(20)
   if (error) { console.error('fetchDailyLeaderboard:', error); return [] }
   return (data ?? []).map((row, i) => ({
@@ -108,6 +109,81 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
     pyramid_found: row.pyramid_found as Record<string, string> | null,
     mode: (row as { mode?: string }).mode ?? 'classic',
   }))
+}
+
+// ─── Classement cumul / mensuel ──────────────────────────────────────────────
+
+export interface AggregateLeaderboardEntry {
+  rank: number
+  user_id: string
+  display_name: string | null
+  points: number
+  top1: number
+  top2: number
+  top3: number
+  total_played: number
+  is_me: boolean
+}
+
+// yearMonth : 'YYYY-MM' pour filtrer un mois, null pour all-time.
+// Source : RPC SQL `top_aggregated_players` (voir supabase_migration_leaderboard.sql).
+export async function fetchAggregateLeaderboard(
+  yearMonth: string | null = null,
+  lim = 10
+): Promise<AggregateLeaderboardEntry[]> {
+  const myId = await getUserId()
+  const { data, error } = await supabase.rpc('top_aggregated_players', {
+    year_month: yearMonth,
+    lim,
+  })
+  if (error) { console.error('fetchAggregateLeaderboard:', error); return [] }
+  return ((data as Array<{
+    user_id: string
+    display_name: string | null
+    points: number
+    top1: number
+    top2: number
+    top3: number
+    total_played: number
+  }>) ?? []).map((row, i) => ({
+    rank: i + 1,
+    user_id: row.user_id,
+    display_name: row.display_name,
+    points: row.points,
+    top1: row.top1,
+    top2: row.top2,
+    top3: row.top3,
+    total_played: row.total_played,
+    is_me: row.user_id === myId,
+  }))
+}
+
+// ─── Record d'un mode (pour la carte d'accueil) ──────────────────────────────
+
+export interface ModeRecord {
+  display_name: string | null
+  elapsed_secs: number
+  date: string
+}
+
+// Renvoie le record (temps le plus rapide, défi complété) pour un mode donné.
+export async function fetchModeRecord(modeId: string): Promise<ModeRecord | null> {
+  const { data, error } = await supabase
+    .from('daily_results')
+    .select('elapsed_secs, date, profiles(display_name)')
+    .eq('mode', modeId)
+    .eq('completed', true)
+    .order('elapsed_secs', { ascending: true })
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) { console.error('fetchModeRecord:', error); return null }
+  if (!data) return null
+  return {
+    display_name: (data.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
+    elapsed_secs: data.elapsed_secs,
+    date: data.date,
+  }
 }
 
 // ─── Player stats ─────────────────────────────────────────────────────────────
@@ -169,25 +245,3 @@ export async function submitGameResult(payload: GameResultPayload): Promise<void
   if (error) console.error('submitGameResult:', error)
 }
 
-// ─── Streak leaderboard ────────────────────────────────────────────────────────
-
-export interface StreakEntry {
-  display_name: string | null
-  best_daily_streak: number
-  daily_played: number
-}
-
-export async function fetchStreakLeaderboard(): Promise<StreakEntry[]> {
-  const { data, error } = await supabase
-    .from('player_stats')
-    .select('best_daily_streak, daily_played, profiles(display_name)')
-    .gt('best_daily_streak', 0)
-    .order('best_daily_streak', { ascending: false })
-    .limit(3)
-  if (error) { console.error('fetchStreakLeaderboard:', error); return [] }
-  return (data ?? []).map(row => ({
-    display_name: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
-    best_daily_streak: row.best_daily_streak,
-    daily_played: row.daily_played,
-  }))
-}

@@ -124,7 +124,9 @@ as $$
 $$;
 
 
--- ─── Mes stats agrégées (section "Vous") ───────────────────────────────────
+-- ─── Mes stats agrégées (section "Vous" + bandeau accueil) ────────────────
+-- period ∈ ('week', 'month', 'all')
+-- 'all' = pas de filtre de date, pas de bonus hebdo (sinon massif/incohérent)
 create or replace function my_aggregate_stats(
   my_id uuid,
   period text default 'month'
@@ -145,13 +147,13 @@ stable
 as $$
   with bounds as (
     select
-      case when period = 'week'
-        then date_trunc('week', current_date)::date
-        else date_trunc('month', current_date)::date
+      case when period = 'week' then date_trunc('week', current_date)::date
+           when period = 'month' then date_trunc('month', current_date)::date
+           else '1970-01-01'::date
       end as start_d,
-      case when period = 'week'
-        then (date_trunc('week', current_date) + interval '7 days')::date - 1
-        else (date_trunc('month', current_date) + interval '1 month')::date - 1
+      case when period = 'week' then (date_trunc('week', current_date) + interval '7 days')::date - 1
+           when period = 'month' then (date_trunc('month', current_date) + interval '1 month')::date - 1
+           else '2999-12-31'::date
       end as end_d
   ),
   in_period as (

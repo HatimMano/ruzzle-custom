@@ -114,6 +114,7 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
 // ─── Classement Semaine / Mois ───────────────────────────────────────────────
 
 export type LeaderboardPeriod = 'week' | 'month'
+export type StatsPeriod = 'week' | 'month' | 'all'
 
 export interface AggregateLeaderboardEntry {
   rank: number
@@ -179,7 +180,7 @@ export interface MyAggregateStats {
   weekly_bonus: number
 }
 
-export async function fetchMyAggregateStats(period: LeaderboardPeriod = 'month'): Promise<MyAggregateStats | null> {
+export async function fetchMyAggregateStats(period: StatsPeriod = 'month'): Promise<MyAggregateStats | null> {
   const myId = await getUserId()
   if (!myId) return null
   const { data, error } = await supabase.rpc('my_aggregate_stats', {

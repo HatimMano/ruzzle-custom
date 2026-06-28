@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { User, History, Play, Trophy } from "lucide-react";
-import { fetchDailyLeaderboard, fetchDailyRecord, fetchMyStats } from "../lib/api";
-import type { LeaderboardEntry, ModeRecord, PlayerStats } from "../lib/api";
+import { fetchDailyLeaderboard, fetchDailyRecord, fetchMyStats, fetchMyAggregateStats } from "../lib/api";
+import type { LeaderboardEntry, ModeRecord, PlayerStats, MyAggregateStats } from "../lib/api";
 import {
   pyramidRows,
   levelLabel,
@@ -69,6 +69,12 @@ export default function HomeScreen({
       return cached ? (JSON.parse(cached) as PlayerStats) : null;
     } catch { return null; }
   });
+  const [myAllTime, setMyAllTime] = useState<MyAggregateStats | null>(() => {
+    try {
+      const cached = localStorage.getItem('griddle:my_alltime');
+      return cached ? (JSON.parse(cached) as MyAggregateStats) : null;
+    } catch { return null; }
+  });
 
   useEffect(() => {
     setModeRecordLoading(true);
@@ -82,6 +88,12 @@ export default function HomeScreen({
       if (stats) {
         setMyStats(stats);
         try { localStorage.setItem('griddle:my_stats', JSON.stringify(stats)); } catch {}
+      }
+    });
+    fetchMyAggregateStats('all').then((stats) => {
+      if (stats) {
+        setMyAllTime(stats);
+        try { localStorage.setItem('griddle:my_alltime', JSON.stringify(stats)); } catch {}
       }
     });
   }, [dailyPlayedToday]);  // refetch après soumission daily (stats peuvent avoir changé)
@@ -259,8 +271,8 @@ export default function HomeScreen({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
 
-            {/* Carte stats globales — visible si le joueur a au moins 1 partie */}
-            {myStats && myStats.daily_played > 0 && (
+            {/* Bandeau stats globales (all-time) — visible si le joueur a au moins 1 partie */}
+            {myAllTime && myAllTime.total_played > 0 && (
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-around",
                 gap: "0.4rem",
@@ -271,28 +283,25 @@ export default function HomeScreen({
                 fontSize: "0.7rem",
                 fontVariantNumeric: "tabular-nums",
               }}>
-                <span title="Défis joués" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
-                  <span>🏆</span>
-                  <span style={{ color: "white", fontWeight: 700 }}>{myStats.daily_played}</span>
+                <span title="Points cumulés all-time" style={{ display: "flex", alignItems: "baseline", gap: "0.2rem" }}>
+                  <span style={{ color: "white", fontWeight: 700, fontSize: "0.85rem" }}>{myAllTime.points}</span>
+                  <span style={{ color: "#64748b", fontSize: "0.6rem" }}>pts</span>
                 </span>
-                {myStats.best_daily_streak > 0 && (
-                  <span title="Plus longue série" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
-                    <span>🔥</span>
-                    <span style={{ color: "white", fontWeight: 700 }}>{myStats.best_daily_streak}j</span>
-                  </span>
-                )}
-                {myStats.fastest_complete_secs && (
-                  <span title="Record vitesse (défi complété)" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
+                <span title="Podiums (🥇/🥈/🥉)" style={{ display: "flex", alignItems: "baseline", gap: "0.15rem", color: "#94a3b8" }}>
+                  <span style={{ color: "white", fontWeight: 700 }}>{myAllTime.top1}</span>
+                  <span style={{ color: "#475569" }}>/</span>
+                  <span style={{ color: "white", fontWeight: 700 }}>{myAllTime.top2}</span>
+                  <span style={{ color: "#475569" }}>/</span>
+                  <span style={{ color: "white", fontWeight: 700 }}>{myAllTime.top3}</span>
+                </span>
+                <span title="Défis joués" style={{ display: "flex", alignItems: "baseline", gap: "0.2rem", color: "#94a3b8" }}>
+                  <span style={{ color: "white", fontWeight: 700 }}>{myAllTime.total_played}</span>
+                  <span style={{ fontSize: "0.6rem" }}>défis</span>
+                </span>
+                {myStats?.fastest_complete_secs && (
+                  <span title="Record vitesse" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
                     <span>⚡</span>
                     <span style={{ color: "white", fontWeight: 700 }}>{fmtRecordTime(myStats.fastest_complete_secs)}</span>
-                  </span>
-                )}
-                {myStats.longest_word && (
-                  <span title="Mot le plus long trouvé" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8", minWidth: 0, overflow: "hidden" }}>
-                    <span>🔤</span>
-                    <span style={{ color: "white", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {myStats.longest_word}
-                    </span>
                   </span>
                 )}
               </div>

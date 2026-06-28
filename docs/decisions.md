@@ -15,6 +15,41 @@ Format type :
 
 ---
 
+## 2026-06-28 — Classement Semaine/Mois + bonus hebdo (remplace cumul/mensuel)
+
+**Trigger** : le classement all-time était biaisé envers les anciens joueurs (impossible de rattraper le top après 2-3 semaines de retard) → frustration des nouveaux. Besoin d'une compétition qui se renouvelle.
+
+**Options envisagées** :
+- a) Garder mensuel seul, virer all-time
+- b) **Semaine + Mois avec bonus hebdo +5/+3/+1 injecté dans le mois**
+- c) Semaine + Mois + Année (3 onglets)
+
+**Choix** : b)
+
+**Pourquoi** :
+- La semaine donne une compétition à court terme renouvelable, le mois récompense la régularité.
+- Le bonus hebdo crée un "trophée" hebdomadaire qui persiste dans le mois → la semaine "compte" sur la durée.
+- Le all-time n'est pas regretté : `total_score`, `longest_word`, `best_daily_streak` dans la section "Vous" valorisent déjà l'historique long terme.
+
+**Implémentation** :
+- Semaine = lundi-dimanche (ISO, `date_trunc('week', date)`).
+- Bonus calculé **à la clôture** : top1/2/3 d'une semaine ne sont crédités que quand la semaine est terminée (`week_start + 7 days <= current_date`). La semaine en cours = compétition pure, sans bonus visible. Au passage du lundi suivant, +5/+3/+1 sont figés.
+- Bonus appartient au mois contenant le **lundi** de la semaine (cas simple : la quasi-totalité des semaines sont dans un seul mois ; le cas chevauchant tombe sur le mois du lundi).
+- Tout calculé à la volée dans la RPC `top_aggregated_players(period, lim)` — aucun job cron, aucune table extra.
+- RPC `my_aggregate_stats(my_id, period)` retourne aussi `weekly_bonus` pour l'afficher dans la section "Vous".
+
+**Tradeoffs assumés** :
+- Le calcul à la volée est O(n daily_results × log n) — OK tant qu'on est sous le million de résultats. Si on scale beaucoup, materialized view envisageable.
+- Le bonus à la clôture = pas de "live" thrill pendant la semaine. Choix assumé : moins frustrant si on perd sa 1ʳᵉ place dimanche soir.
+- API breaking : `fetchAggregateLeaderboard(yearMonth)` → `fetchAggregateLeaderboard(period)`. Cache local du drawer reset (state ré-init au reload).
+
+**À surveiller** :
+- Si la définition de la semaine doit changer (calendaire vs ISO), `date_trunc('week')` à remplacer.
+- Une semaine qui chevauche mai/juin : son bonus tombe sur le mois du lundi. À ré-évaluer si confusion utilisateur.
+- Le `period` parameter de la RPC est sans validation Postgres → si on en ajoute un nouveau (`year`), bien étendre les branches `case when`.
+
+---
+
 ## 2026-06-25 — Classement cumul/mensuel + record du mode sur l'accueil
 
 **Trigger** : besoin d'un vrai leaderboard pour engager les joueurs (au-delà du classement du jour). Le user voulait aussi un "record du défi" affiché sur l'accueil pour donner un challenge psychologique (battre HatimIL).

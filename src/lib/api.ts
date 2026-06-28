@@ -111,7 +111,9 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
   }))
 }
 
-// ─── Classement cumul / mensuel ──────────────────────────────────────────────
+// ─── Classement Semaine / Mois ───────────────────────────────────────────────
+
+export type LeaderboardPeriod = 'week' | 'month'
 
 export interface AggregateLeaderboardEntry {
   rank: number
@@ -122,18 +124,21 @@ export interface AggregateLeaderboardEntry {
   top2: number
   top3: number
   total_played: number
+  weekly_bonus: number
   is_me: boolean
 }
 
-// yearMonth : 'YYYY-MM' pour filtrer un mois, null pour all-time.
+// period : 'week' (lundi-dimanche en cours) ou 'month' (mois en cours).
+// Pour 'month', les points incluent un bonus +5/+3/+1 pour le top1/2/3 de
+// chaque semaine TERMINÉE appartenant au mois.
 // Source : RPC SQL `top_aggregated_players` (voir supabase_migration_leaderboard.sql).
 export async function fetchAggregateLeaderboard(
-  yearMonth: string | null = null,
+  period: LeaderboardPeriod = 'month',
   lim = 10
 ): Promise<AggregateLeaderboardEntry[]> {
   const myId = await getUserId()
   const { data, error } = await supabase.rpc('top_aggregated_players', {
-    year_month: yearMonth,
+    period,
     lim,
   })
   if (error) { console.error('fetchAggregateLeaderboard:', error); return [] }
@@ -145,6 +150,7 @@ export async function fetchAggregateLeaderboard(
     top2: number
     top3: number
     total_played: number
+    weekly_bonus: number
   }>) ?? []).map((row, i) => ({
     rank: i + 1,
     user_id: row.user_id,
@@ -154,6 +160,7 @@ export async function fetchAggregateLeaderboard(
     top2: row.top2,
     top3: row.top3,
     total_played: row.total_played,
+    weekly_bonus: row.weekly_bonus ?? 0,
     is_me: row.user_id === myId,
   }))
 }
@@ -168,14 +175,15 @@ export interface MyAggregateStats {
   top3: number
   total_played: number
   total_ranked: number  // nombre total de joueurs avec ≥ 1 podium
+  weekly_bonus: number
 }
 
-export async function fetchMyAggregateStats(yearMonth: string | null = null): Promise<MyAggregateStats | null> {
+export async function fetchMyAggregateStats(period: LeaderboardPeriod = 'month'): Promise<MyAggregateStats | null> {
   const myId = await getUserId()
   if (!myId) return null
   const { data, error } = await supabase.rpc('my_aggregate_stats', {
     my_id: myId,
-    year_month: yearMonth,
+    period,
   })
   if (error) { console.error('fetchMyAggregateStats:', error); return null }
   const row = (data as MyAggregateStats[] | null)?.[0]
@@ -188,6 +196,7 @@ export async function fetchMyAggregateStats(yearMonth: string | null = null): Pr
     top3: row.top3 ?? 0,
     total_played: row.total_played ?? 0,
     total_ranked: row.total_ranked ?? 0,
+    weekly_bonus: row.weekly_bonus ?? 0,
   }
 }
 

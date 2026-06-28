@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats } from "../lib/api";
-import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats } from "../lib/api";
+import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats, LeaderboardPeriod } from "../lib/api";
 import { modeForDate, isMarathonMode, isPyramidMode } from "../lib/dailyModes";
 import { getTrie } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
 import ProgressStrip from "./leaderboard/ProgressStrip";
 
 type Tab = 'jour' | 'classement' | 'mots';
-type Period = 'cumul' | 'mois';
+type Period = LeaderboardPeriod;
 
 interface Props {
   date: string;
@@ -24,11 +24,6 @@ function fmtTime(secs: number) {
   return m > 0 ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
 }
 
-function currentYearMonth(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 export default function LeaderboardDrawer({
   date,
   leaderboard,
@@ -36,20 +31,20 @@ export default function LeaderboardDrawer({
   onClose,
 }: Props) {
   const [tab, setTab] = useState<Tab>('jour');
-  const [period, setPeriod] = useState<Period>('cumul');
+  const [period, setPeriod] = useState<Period>('week');
   const [classementSeen, setClassementSeen] = useState<boolean>(
     () => localStorage.getItem('griddle:seen_classement_v1') === '1'
   );
   const [aggregate, setAggregate] = useState<AggregateLeaderboardEntry[]>([]);
   const [aggregateLoading, setAggregateLoading] = useState(false);
   const [aggregateCache, setAggregateCache] = useState<Record<Period, AggregateLeaderboardEntry[] | null>>({
-    cumul: null,
-    mois: null,
+    week: null,
+    month: null,
   });
   const [myStats, setMyStats] = useState<MyAggregateStats | null>(null);
   const [myStatsCache, setMyStatsCache] = useState<Record<Period, MyAggregateStats | null>>({
-    cumul: null,
-    mois: null,
+    week: null,
+    month: null,
   });
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
 
@@ -57,8 +52,7 @@ export default function LeaderboardDrawer({
     if (aggregateCache[p]) setAggregate(aggregateCache[p]!);
     else {
       setAggregateLoading(true);
-      const yearMonth = p === 'mois' ? currentYearMonth() : null;
-      fetchAggregateLeaderboard(yearMonth, 10)
+      fetchAggregateLeaderboard(p, 10)
         .then((rows) => {
           setAggregate(rows);
           setAggregateCache((prev) => ({ ...prev, [p]: rows }));
@@ -67,8 +61,7 @@ export default function LeaderboardDrawer({
     }
     if (myStatsCache[p]) setMyStats(myStatsCache[p]);
     else {
-      const yearMonth = p === 'mois' ? currentYearMonth() : null;
-      fetchMyAggregateStats(yearMonth).then((stats) => {
+      fetchMyAggregateStats(p).then((stats) => {
         setMyStats(stats);
         setMyStatsCache((prev) => ({ ...prev, [p]: stats }));
       });
@@ -154,10 +147,10 @@ export default function LeaderboardDrawer({
           })}
         </div>
 
-        {/* Sous-toggle Cumul / Mois (uniquement onglet Classement) */}
+        {/* Sous-toggle Semaine / Mois (uniquement onglet Classement) */}
         {tab === 'classement' && (
           <div style={{ display: "flex", gap: "0.4rem" }}>
-            {([['cumul', 'Tout'], ['mois', 'Ce mois']] as const).map(([p, label]) => (
+            {([['week', 'Cette semaine'], ['month', 'Ce mois']] as const).map(([p, label]) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
@@ -236,6 +229,11 @@ export default function LeaderboardDrawer({
                   <span>
                     <span style={{ color: "white", fontWeight: 700, fontSize: "0.85rem" }}>{myStats.points}</span>
                     <span style={{ color: "#64748b" }}> pts</span>
+                    {period === 'month' && myStats.weekly_bonus > 0 && (
+                      <span style={{ color: "#a78bfa", fontWeight: 600, marginLeft: "0.25rem" }} title="Bonus hebdo">
+                        (+{myStats.weekly_bonus} 🗓)
+                      </span>
+                    )}
                   </span>
                   <span>
                     {myStats.top1}<span style={{ color: "#475569" }}>/</span>{myStats.top2}<span style={{ color: "#475569" }}>/</span>{myStats.top3}
@@ -254,7 +252,7 @@ export default function LeaderboardDrawer({
             {aggregateLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
             {!aggregateLoading && aggregate.length === 0 && (
               <p className="text-slate-600 text-sm text-center py-6">
-                {period === 'mois' ? 'Aucun classement pour ce mois' : 'Aucun classement encore'}
+                {period === 'week' ? 'Aucun classement pour cette semaine' : 'Aucun classement pour ce mois'}
               </p>
             )}
             {!aggregateLoading && aggregate.map((entry) => (
@@ -280,12 +278,20 @@ export default function LeaderboardDrawer({
                   {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.65rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
                 </span>
                 <span style={{
-                  fontWeight: 700, fontSize: "0.95rem",
-                  color: entry.is_me ? "#fbbf24" : "white",
-                  fontVariantNumeric: "tabular-nums",
-                  flexShrink: 0,
+                  display: "flex", flexDirection: "column", alignItems: "flex-end",
+                  fontVariantNumeric: "tabular-nums", flexShrink: 0,
                 }}>
-                  {entry.points}<span style={{ fontSize: "0.65rem", color: "#475569", marginLeft: "0.15rem", fontWeight: 600 }}>pts</span>
+                  <span style={{
+                    fontWeight: 700, fontSize: "0.95rem",
+                    color: entry.is_me ? "#fbbf24" : "white",
+                  }}>
+                    {entry.points}<span style={{ fontSize: "0.65rem", color: "#475569", marginLeft: "0.15rem", fontWeight: 600 }}>pts</span>
+                  </span>
+                  {period === 'month' && entry.weekly_bonus > 0 && (
+                    <span style={{ fontSize: "0.55rem", color: "#a78bfa", fontWeight: 700 }} title="Bonus hebdo (top semaines terminées)">
+                      +{entry.weekly_bonus} 🗓
+                    </span>
+                  )}
                 </span>
                 <span style={{
                   display: "flex", gap: "0.15rem", alignItems: "baseline",
@@ -306,9 +312,14 @@ export default function LeaderboardDrawer({
 
             {/* Légende discrète sous la liste */}
             {!aggregateLoading && aggregate.length > 0 && (
-              <p style={{ fontSize: "0.65rem", color: "#475569", textAlign: "center", padding: "0.5rem 0", fontStyle: "italic" }}>
-                Points = 3×🥇 + 2×🥈 + 1×🥉 · format {' '}
-                <span style={{ color: "#94a3b8" }}>🥇/🥈/🥉</span> + nombre de défis joués
+              <p style={{ fontSize: "0.65rem", color: "#475569", textAlign: "center", padding: "0.5rem 0", fontStyle: "italic", lineHeight: 1.5 }}>
+                Points daily = 3×🥇 + 2×🥈 + 1×🥉
+                {period === 'month' && (
+                  <>
+                    <br />
+                    Bonus hebdo : +5/+3/+1 pour le top1/2/3 de chaque semaine terminée
+                  </>
+                )}
               </p>
             )}
           </>)}

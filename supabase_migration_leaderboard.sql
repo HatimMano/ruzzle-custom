@@ -9,7 +9,10 @@
 -- Bonus hebdo (mois uniquement) : +5/+3/+1 pour top1/2/3 de chaque semaine
 --   TERMINÉE appartenant au mois courant. La semaine en cours ne donne PAS
 --   de bonus tant qu'elle n'est pas close (lundi suivant ≤ today).
--- Tiebreaker hebdo : week_pts desc, weekly_top1 desc, weekly_top2 desc.
+-- Tiebreaker classement : points desc, top1 desc, top2 desc, total_played ASC
+--   (jouer moins pour le même résultat = mieux classé)
+-- Tiebreaker hebdo (au sein d'une semaine) : week_pts desc, wt1 desc, wt2 desc, week_played asc
+-- Égalité parfaite acceptée → rank() Olympic (1, 1, 3, 4...) → bonus partagé.
 
 -- Drop des anciennes signatures (retour différent → CREATE OR REPLACE refuse)
 drop function if exists top_aggregated_players(text, integer);
@@ -20,6 +23,7 @@ create or replace function top_aggregated_players(
   lim int default 10
 )
 returns table (
+  rank int,
   user_id uuid,
   display_name text,
   points int,
@@ -74,7 +78,8 @@ as $$
       date_trunc('week', r.date::date) as week_start,
       sum(case when r.rk=1 then 3 when r.rk=2 then 2 when r.rk=3 then 1 else 0 end)::int as week_pts,
       sum(case when r.rk=1 then 1 else 0 end)::int as wt1,
-      sum(case when r.rk=2 then 1 else 0 end)::int as wt2
+      sum(case when r.rk=2 then 1 else 0 end)::int as wt2,
+      count(*)::int as week_played
     from ranked r
     where period = 'month'
       and date_trunc('week', r.date::date) + interval '7 days' <= current_date  -- semaine close
@@ -84,7 +89,7 @@ as $$
     select user_id, week_start,
       rank() over (
         partition by week_start
-        order by week_pts desc, wt1 desc, wt2 desc
+        order by week_pts desc, wt1 desc, wt2 desc, week_played asc
       ) as wrk
     from weekly_user_pts
     where week_pts > 0
@@ -94,21 +99,27 @@ as $$
       sum(case when wrk=1 then 5 when wrk=2 then 3 when wrk=3 then 1 else 0 end)::int as bonus
     from weekly_ranked
     group by user_id
+  ),
+  final as (
+    select
+      dp.user_id,
+      p.display_name,
+      (dp.daily_points + coalesce(wb.bonus, 0))::int as points,
+      dp.t1 as top1,
+      dp.t2 as top2,
+      dp.t3 as top3,
+      dp.played as total_played,
+      coalesce(wb.bonus, 0)::int as weekly_bonus
+    from daily_pts dp
+    left join profiles p on p.id = dp.user_id
+    left join weekly_bonus_calc wb on wb.user_id = dp.user_id
+    where (dp.daily_points + coalesce(wb.bonus, 0)) > 0
   )
   select
-    dp.user_id,
-    p.display_name,
-    (dp.daily_points + coalesce(wb.bonus, 0))::int as points,
-    dp.t1 as top1,
-    dp.t2 as top2,
-    dp.t3 as top3,
-    dp.played as total_played,
-    coalesce(wb.bonus, 0)::int as weekly_bonus
-  from daily_pts dp
-  left join profiles p on p.id = dp.user_id
-  left join weekly_bonus_calc wb on wb.user_id = dp.user_id
-  where (dp.daily_points + coalesce(wb.bonus, 0)) > 0
-  order by points desc, dp.t1 desc, dp.t2 desc, dp.played desc
+    rank() over (order by points desc, top1 desc, top2 desc, total_played asc)::int as rank,
+    user_id, display_name, points, top1, top2, top3, total_played, weekly_bonus
+  from final
+  order by rank, user_id
   limit lim
 $$;
 
@@ -203,7 +214,7 @@ as $$
   ranked_pts as (
     select a.*,
       case when a.points > 0
-        then rank() over (order by a.points desc, a.t1 desc, a.t2 desc, a.played desc)::int
+        then rank() over (order by a.points desc, a.t1 desc, a.t2 desc, a.played asc)::int
         else null
       end as rk_global
     from aggr a

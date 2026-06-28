@@ -143,6 +143,7 @@ export async function fetchAggregateLeaderboard(
   })
   if (error) { console.error('fetchAggregateLeaderboard:', error); return [] }
   return ((data as Array<{
+    rank: number
     user_id: string
     display_name: string | null
     points: number
@@ -151,8 +152,8 @@ export async function fetchAggregateLeaderboard(
     top3: number
     total_played: number
     weekly_bonus: number
-  }>) ?? []).map((row, i) => ({
-    rank: i + 1,
+  }>) ?? []).map((row) => ({
+    rank: row.rank,
     user_id: row.user_id,
     display_name: row.display_name,
     points: row.points,

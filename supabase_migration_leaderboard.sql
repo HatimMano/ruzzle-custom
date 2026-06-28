@@ -40,12 +40,12 @@ as $$
   with bounds as (
     select
       case when period = 'week'
-        then date_trunc('week', current_date)::date
-        else date_trunc('month', current_date)::date
+        then date_trunc('week', (now() at time zone 'Europe/Paris')::date)::date
+        else date_trunc('month', (now() at time zone 'Europe/Paris')::date)::date
       end as start_d,
       case when period = 'week'
-        then (date_trunc('week', current_date) + interval '7 days')::date - 1
-        else (date_trunc('month', current_date) + interval '1 month')::date - 1
+        then (date_trunc('week', (now() at time zone 'Europe/Paris')::date) + interval '7 days')::date - 1
+        else (date_trunc('month', (now() at time zone 'Europe/Paris')::date) + interval '1 month')::date - 1
       end as end_d
   ),
   in_period as (
@@ -82,7 +82,7 @@ as $$
       count(*)::int as week_played
     from ranked r
     where period = 'month'
-      and date_trunc('week', r.date::date) + interval '7 days' <= current_date  -- semaine close
+      and date_trunc('week', r.date::date) + interval '7 days' <= (now() at time zone 'Europe/Paris')::date  -- semaine close
     group by r.user_id, date_trunc('week', r.date::date)
   ),
   weekly_ranked as (
@@ -147,12 +147,12 @@ stable
 as $$
   with bounds as (
     select
-      case when period = 'week' then date_trunc('week', current_date)::date
-           when period = 'month' then date_trunc('month', current_date)::date
+      case when period = 'week' then date_trunc('week', (now() at time zone 'Europe/Paris')::date)::date
+           when period = 'month' then date_trunc('month', (now() at time zone 'Europe/Paris')::date)::date
            else '1970-01-01'::date
       end as start_d,
-      case when period = 'week' then (date_trunc('week', current_date) + interval '7 days')::date - 1
-           when period = 'month' then (date_trunc('month', current_date) + interval '1 month')::date - 1
+      case when period = 'week' then (date_trunc('week', (now() at time zone 'Europe/Paris')::date) + interval '7 days')::date - 1
+           when period = 'month' then (date_trunc('month', (now() at time zone 'Europe/Paris')::date) + interval '1 month')::date - 1
            else '2999-12-31'::date
       end as end_d
   ),
@@ -187,7 +187,7 @@ as $$
       sum(case when r.rk=2 then 1 else 0 end)::int as wt2
     from ranked r
     where period = 'month'
-      and date_trunc('week', r.date::date) + interval '7 days' <= current_date
+      and date_trunc('week', r.date::date) + interval '7 days' <= (now() at time zone 'Europe/Paris')::date
     group by r.user_id, date_trunc('week', r.date::date)
   ),
   weekly_ranked as (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats } from "../lib/api";
-import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats, LeaderboardPeriod } from "../lib/api";
+import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats, fetchPlayerProfile } from "../lib/api";
+import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats, LeaderboardPeriod, PlayerProfile } from "../lib/api";
 import { modeForDate, isMarathonMode, isPyramidMode } from "../lib/dailyModes";
 import { getTrie } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
@@ -47,6 +47,26 @@ export default function LeaderboardDrawer({
     month: null,
   });
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+
+  // Profil joueur ouvert (clic sur une ligne) — navigation interne au drawer.
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<PlayerProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const openProfile = (userId: string, fallbackName: string | null) => {
+    setSelectedUserId(userId);
+    setSelectedProfile({
+      display_name: fallbackName,
+      daily_played: 0, top1: 0, top2: 0, top3: 0,
+      week_wins: 0, month_wins: 0, points_all_time: 0,
+      longest_word: null, fastest_complete_secs: null,
+    });
+    setProfileLoading(true);
+    fetchPlayerProfile(userId)
+      .then((p) => { if (p) setSelectedProfile(p); })
+      .finally(() => setProfileLoading(false));
+  };
+  const closeProfile = () => { setSelectedUserId(null); setSelectedProfile(null); };
 
   const loadAggregate = (p: Period) => {
     if (aggregateCache[p]) setAggregate(aggregateCache[p]!);
@@ -107,12 +127,101 @@ export default function LeaderboardDrawer({
       onClick={onClose}
     >
       <div
-        className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 max-h-[80vh] flex flex-col gap-3"
+        className="w-full bg-slate-900 border-t border-slate-700 rounded-t-3xl p-4 h-[80vh] flex flex-col gap-3"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-10 h-1 rounded-full bg-slate-700 mx-auto mb-1" />
 
+        {/* ─── Vue Profil (navigation interne au drawer) ─────────────────── */}
+        {selectedProfile && (
+          <>
+            <button
+              onClick={closeProfile}
+              style={{
+                alignSelf: "flex-start",
+                display: "flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.4rem 0.8rem",
+                fontSize: "0.75rem", fontWeight: 600,
+                background: "rgba(30,41,59,0.8)", border: "1px solid rgba(71,85,105,0.3)",
+                color: "#94a3b8", borderRadius: "999px", cursor: "pointer",
+              }}
+            >
+              ← Retour
+            </button>
+
+            <div style={{
+              borderRadius: "0.875rem",
+              background: "rgba(30,41,59,0.6)",
+              border: "1px solid rgba(71,85,105,0.3)",
+              padding: "1rem 1.1rem",
+              display: "flex", flexDirection: "column", gap: "0.8rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ fontSize: "1.15rem", fontWeight: 700, color: "white" }}>
+                  {selectedProfile.display_name ?? `Joueur ${selectedUserId?.slice(0, 4)}`}
+                </span>
+                {selectedProfile.month_wins > 0 && (
+                  <span title={`${selectedProfile.month_wins} mois remporté${selectedProfile.month_wins > 1 ? 's' : ''}`} style={{ fontSize: "0.85rem", letterSpacing: "-0.05em", color: "#fbbf24" }}>
+                    {selectedProfile.month_wins <= 5
+                      ? '🏆'.repeat(selectedProfile.month_wins)
+                      : <>🏆🏆🏆🏆🏆<span style={{ color: "#64748b", fontWeight: 600, marginLeft: "0.2rem", fontSize: "0.7rem" }}>+{selectedProfile.month_wins - 5}</span></>}
+                  </span>
+                )}
+              </div>
+
+              {profileLoading ? (
+                <p style={{ color: "#475569", fontSize: "0.8rem", textAlign: "center" }}>Chargement…</p>
+              ) : (
+                <>
+                  {/* Conquêtes périodiques */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <div style={{ background: "rgba(15,23,42,0.6)", borderRadius: "0.6rem", padding: "0.55rem 0.7rem" }}>
+                      <p style={{ fontSize: "0.6rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.2rem" }}>Mois remportés</p>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#fbbf24" }}>{selectedProfile.month_wins}</p>
+                    </div>
+                    <div style={{ background: "rgba(15,23,42,0.6)", borderRadius: "0.6rem", padding: "0.55rem 0.7rem" }}>
+                      <p style={{ fontSize: "0.6rem", color: "#64748b", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.2rem" }}>Semaines remportées</p>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#a78bfa" }}>{selectedProfile.week_wins}</p>
+                    </div>
+                  </div>
+
+                  {/* Podiums daily all-time */}
+                  <div style={{ display: "flex", justifyContent: "space-around", fontSize: "0.75rem", color: "#94a3b8", fontVariantNumeric: "tabular-nums" }}>
+                    <span><span style={{ color: "white", fontWeight: 700, fontSize: "1rem" }}>{selectedProfile.top1}</span> 🥇</span>
+                    <span><span style={{ color: "white", fontWeight: 700, fontSize: "1rem" }}>{selectedProfile.top2}</span> 🥈</span>
+                    <span><span style={{ color: "white", fontWeight: 700, fontSize: "1rem" }}>{selectedProfile.top3}</span> 🥉</span>
+                    <span><span style={{ color: "white", fontWeight: 700, fontSize: "1rem" }}>{selectedProfile.daily_played}</span> <span style={{ fontSize: "0.65rem" }}>défis</span></span>
+                  </div>
+
+                  {/* Records */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", fontSize: "0.75rem", color: "#94a3b8" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>🏆 Points cumulés</span>
+                      <span style={{ color: "white", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{selectedProfile.points_all_time} pts</span>
+                    </div>
+                    {selectedProfile.fastest_complete_secs !== null && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>⚡ Record vitesse</span>
+                        <span style={{ color: "white", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtTime(selectedProfile.fastest_complete_secs)}</span>
+                      </div>
+                    )}
+                    {selectedProfile.longest_word && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>🔤 Mot le plus long</span>
+                        <span style={{ color: "white", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>{selectedProfile.longest_word}</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         {/* Onglets principaux */}
+        {!selectedProfile && (
+          <>
+        {/* (Indentation préservée pour minimiser le diff) */}
         <div style={{ display: "flex", background: "rgba(30,41,59,0.9)", borderRadius: "999px", padding: "0.25rem", gap: "0.25rem" }}>
           {([['jour', '🏆 Jour'], ['classement', '⭐ Classement'], ['mots', '🔤 Mots']] as const).map(([id, label]) => {
             const showBadge = id === 'classement' && !classementSeen;
@@ -178,7 +287,11 @@ export default function LeaderboardDrawer({
             {!leaderboardLoading && leaderboard.map((entry) => {
               const displayScore = entry.score + Math.max(0, 4 - entry.rank);
               return (
-                <div key={entry.rank} style={{ display: "flex", alignItems: "center", padding: "0.75rem 1rem", borderRadius: "0.875rem", background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)", border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)", gap: "0.5rem" }}>
+                <div
+                  key={entry.rank}
+                  onClick={() => openProfile(entry.user_id, entry.display_name)}
+                  style={{ cursor: "pointer", display: "flex", alignItems: "center", padding: "0.75rem 1rem", borderRadius: "0.875rem", background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)", border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)", gap: "0.5rem" }}
+                >
                   <span style={{ width: "2rem", fontSize: "1.1rem", flexShrink: 0 }}>{RANK_MEDAL[entry.rank] ?? entry.rank}</span>
                   <span style={{ flex: 1, fontWeight: 500, color: entry.is_me ? "#fbbf24" : "white", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {entry.display_name ?? `Joueur #${entry.rank}`}
@@ -258,7 +371,9 @@ export default function LeaderboardDrawer({
             {!aggregateLoading && aggregate.map((entry) => (
               <div
                 key={entry.user_id}
+                onClick={() => openProfile(entry.user_id, entry.display_name)}
                 style={{
+                  cursor: "pointer",
                   display: "flex", alignItems: "center",
                   padding: "0.6rem 0.85rem", borderRadius: "0.75rem",
                   background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)",
@@ -273,9 +388,19 @@ export default function LeaderboardDrawer({
                   flex: 1, fontWeight: 500,
                   color: entry.is_me ? "#fbbf24" : "white",
                   minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  display: "flex", alignItems: "center", gap: "0.3rem",
                 }}>
-                  {entry.display_name ?? `Joueur ${entry.user_id.slice(0, 4)}`}
-                  {entry.is_me && <span style={{ marginLeft: "0.4rem", fontSize: "0.65rem", color: "rgba(251,191,36,0.5)" }}>· moi</span>}
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {entry.display_name ?? `Joueur ${entry.user_id.slice(0, 4)}`}
+                  </span>
+                  {entry.month_wins > 0 && (
+                    <span title={`${entry.month_wins} mois remporté${entry.month_wins > 1 ? 's' : ''}`} style={{ fontSize: "0.65rem", letterSpacing: "-0.05em", color: "#fbbf24", flexShrink: 0 }}>
+                      {entry.month_wins <= 3
+                        ? '🏆'.repeat(entry.month_wins)
+                        : <>🏆🏆🏆<span style={{ color: "#64748b", fontWeight: 600, marginLeft: "0.1rem" }}>+{entry.month_wins - 3}</span></>}
+                    </span>
+                  )}
+                  {entry.is_me && <span style={{ fontSize: "0.65rem", color: "rgba(251,191,36,0.5)", flexShrink: 0 }}>· moi</span>}
                 </span>
                 <span style={{
                   display: "flex", flexDirection: "column", alignItems: "flex-end",
@@ -375,6 +500,8 @@ export default function LeaderboardDrawer({
             )}
           </>)}
         </div>
+          </>
+        )}
       </div>
     </div>
   );

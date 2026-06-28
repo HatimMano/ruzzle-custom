@@ -77,6 +77,7 @@ export async function submitDailyResult(payload: DailyResultPayload): Promise<vo
 
 export interface LeaderboardEntry {
   rank: number
+  user_id: string
   display_name: string | null
   elapsed_secs: number
   levels_found: number
@@ -100,6 +101,7 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
   if (error) { console.error('fetchDailyLeaderboard:', error); return [] }
   return (data ?? []).map((row, i) => ({
     rank: i + 1,
+    user_id: row.user_id,
     display_name: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
     elapsed_secs: row.elapsed_secs,
     levels_found: row.levels_found,
@@ -126,6 +128,7 @@ export interface AggregateLeaderboardEntry {
   top3: number
   total_played: number
   weekly_bonus: number
+  month_wins: number
   is_me: boolean
 }
 
@@ -153,6 +156,7 @@ export async function fetchAggregateLeaderboard(
     top3: number
     total_played: number
     weekly_bonus: number
+    month_wins: number
   }>) ?? []).map((row) => ({
     rank: row.rank,
     user_id: row.user_id,
@@ -163,8 +167,31 @@ export async function fetchAggregateLeaderboard(
     top3: row.top3,
     total_played: row.total_played,
     weekly_bonus: row.weekly_bonus ?? 0,
+    month_wins: row.month_wins ?? 0,
     is_me: row.user_id === myId,
   }))
+}
+
+// ─── Profil détaillé d'un joueur ─────────────────────────────────────────────
+
+export interface PlayerProfile {
+  display_name: string | null
+  daily_played: number
+  top1: number
+  top2: number
+  top3: number
+  week_wins: number
+  month_wins: number
+  points_all_time: number
+  longest_word: string | null
+  fastest_complete_secs: number | null
+}
+
+export async function fetchPlayerProfile(userId: string): Promise<PlayerProfile | null> {
+  const { data, error } = await supabase.rpc('player_profile_stats', { uid: userId })
+  if (error) { console.error('fetchPlayerProfile:', error); return null }
+  const row = (data as PlayerProfile[] | null)?.[0]
+  return row ?? null
 }
 
 // ─── Mes stats agrégées (pour la section "Vous" du classement) ───────────────

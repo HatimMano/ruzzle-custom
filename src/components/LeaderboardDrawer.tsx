@@ -305,6 +305,7 @@ export default function LeaderboardDrawer({
                     <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
                     <ProgressStrip mode={mode} pyramidFound={entry.pyramid_found} />
                   </div>
+                  <span style={{ fontSize: "1.1rem", color: "#475569", fontWeight: 400, flexShrink: 0, marginLeft: "-0.15rem" }}>›</span>
                 </div>
               );
             })}
@@ -432,6 +433,7 @@ export default function LeaderboardDrawer({
                 <span style={{ fontSize: "0.65rem", color: "#475569", fontVariantNumeric: "tabular-nums", minWidth: "1.5rem", textAlign: "right", flexShrink: 0 }}>
                   {entry.total_played}j
                 </span>
+                <span style={{ fontSize: "1.1rem", color: "#475569", fontWeight: 400, flexShrink: 0, marginLeft: "-0.2rem" }}>›</span>
               </div>
             ))}
 

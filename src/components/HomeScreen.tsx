@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { User, History, Play, Trophy } from "lucide-react";
-import { fetchDailyLeaderboard, fetchDailyRecord } from "../lib/api";
-import type { LeaderboardEntry, ModeRecord } from "../lib/api";
+import { fetchDailyLeaderboard, fetchDailyRecord, fetchMyStats } from "../lib/api";
+import type { LeaderboardEntry, ModeRecord, PlayerStats } from "../lib/api";
 import {
   pyramidRows,
   levelLabel,
@@ -61,10 +61,30 @@ export default function HomeScreen({
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [modeRecord, setModeRecord] = useState<ModeRecord | null>(null);
+  const [modeRecordLoading, setModeRecordLoading] = useState(true);
+  // Cache localStorage des stats perso → affichage instantané au reload.
+  const [myStats, setMyStats] = useState<PlayerStats | null>(() => {
+    try {
+      const cached = localStorage.getItem('griddle:my_stats');
+      return cached ? (JSON.parse(cached) as PlayerStats) : null;
+    } catch { return null; }
+  });
 
   useEffect(() => {
-    fetchDailyRecord(date, todayMode.id).then(setModeRecord);
+    setModeRecordLoading(true);
+    fetchDailyRecord(date, todayMode.id)
+      .then(setModeRecord)
+      .finally(() => setModeRecordLoading(false));
   }, [date, todayMode.id]);
+
+  useEffect(() => {
+    fetchMyStats().then((stats) => {
+      if (stats) {
+        setMyStats(stats);
+        try { localStorage.setItem('griddle:my_stats', JSON.stringify(stats)); } catch {}
+      }
+    });
+  }, [dailyPlayedToday]);  // refetch après soumission daily (stats peuvent avoir changé)
 
   const fmtRecordTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -239,6 +259,44 @@ export default function HomeScreen({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
 
+            {/* Carte stats globales — visible si le joueur a au moins 1 partie */}
+            {myStats && myStats.daily_played > 0 && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-around",
+                gap: "0.4rem",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "0.875rem",
+                background: "rgba(30,41,59,0.6)",
+                border: "1px solid rgba(71,85,105,0.3)",
+                fontSize: "0.7rem",
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                <span title="Défis joués" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
+                  <span>🏆</span>
+                  <span style={{ color: "white", fontWeight: 700 }}>{myStats.daily_played}</span>
+                </span>
+                {myStats.best_daily_streak > 0 && (
+                  <span title="Plus longue série" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
+                    <span>🔥</span>
+                    <span style={{ color: "white", fontWeight: 700 }}>{myStats.best_daily_streak}j</span>
+                  </span>
+                )}
+                {myStats.fastest_complete_secs && (
+                  <span title="Record vitesse (défi complété)" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8" }}>
+                    <span>⚡</span>
+                    <span style={{ color: "white", fontWeight: 700 }}>{fmtRecordTime(myStats.fastest_complete_secs)}</span>
+                  </span>
+                )}
+                {myStats.longest_word && (
+                  <span title="Mot le plus long trouvé" style={{ display: "flex", alignItems: "center", gap: "0.2rem", color: "#94a3b8", minWidth: 0, overflow: "hidden" }}>
+                    <span>🔤</span>
+                    <span style={{ color: "white", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {myStats.longest_word}
+                    </span>
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Carte Défi du jour */}
             <div
@@ -275,27 +333,40 @@ export default function HomeScreen({
                 <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
                   {todayMode.name.toUpperCase()}
                 </p>
-                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: modeRecord ? "0.5rem" : "1rem" }}>
+                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: "0.5rem" }}>
                   {todayMode.subtitle}
                 </p>
-                {modeRecord && (
-                  <p style={{
-                    fontSize: "0.7rem", fontWeight: 600,
-                    color: accentSoft, opacity: 0.85,
-                    marginBottom: "0.9rem",
-                    display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap",
-                  }}>
-                    <span>🏆</span>
-                    <span>Record du jour</span>
-                    <span style={{ color: "white", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
-                      {fmtRecordTime(modeRecord.elapsed_secs)}
-                    </span>
-                    <span>par</span>
-                    <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>
-                      {modeRecord.display_name ?? 'Anonyme'}
-                    </span>
-                  </p>
-                )}
+                {/* Record du jour — label affiché de suite, valeurs en shimmer pendant le fetch */}
+                <div style={{
+                  height: "1.15rem", marginBottom: "0.9rem",
+                  display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap",
+                  fontSize: "0.7rem", fontWeight: 600, color: accentSoft, opacity: 0.85,
+                }}>
+                  <span>🏆</span>
+                  <span>Record du jour</span>
+                  {modeRecordLoading ? (
+                    <span style={{
+                      display: "inline-block",
+                      width: "7rem", height: "0.7rem",
+                      borderRadius: "0.25rem",
+                      background: `linear-gradient(90deg, ${accentSoft}10, ${accentSoft}25, ${accentSoft}10)`,
+                      backgroundSize: "200% 100%",
+                      animation: "shimmer 1.4s linear infinite",
+                    }} />
+                  ) : modeRecord ? (
+                    <>
+                      <span style={{ color: "white", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                        {fmtRecordTime(modeRecord.elapsed_secs)}
+                      </span>
+                      <span>par</span>
+                      <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>
+                        {modeRecord.display_name ?? 'Anonyme'}
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ opacity: 0.6 }}>— sois le premier !</span>
+                  )}
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
                   {pyramidRows(todayMode).map((row, ri) => (
                     <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>

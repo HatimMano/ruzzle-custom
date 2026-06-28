@@ -65,6 +65,11 @@ body {
 }
 .animate-floatScore { animation: floatScore 0.7s ease forwards; }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

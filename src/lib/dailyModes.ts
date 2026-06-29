@@ -397,6 +397,58 @@ export const birthdayMode: DailyModeRules = {
   },
 }
 
+// ─── Mode anniversaire Fate (4×4 grille fixe avec MAMAN + AMOUR + BISOU) ─────
+
+const FATE_BIRTHDAY_DATE = '2026-06-30'
+
+// Grille déterministe (issue de scripts/optimize-birthday-fate.mjs) qui
+// garantit MAMAN, AMOUR, BISOU + 508 mots dont 34 mots de 8L et 4 de 10L.
+//   A M O U
+//   M S S R
+//   A E I A
+//   N T B P
+const FATE_GRID_LETTERS: string[][] = [
+  ['a', 'm', 'o', 'u'],
+  ['m', 's', 's', 'r'],
+  ['a', 'e', 'i', 'a'],
+  ['n', 't', 'b', 'p'],
+]
+
+function generateFateBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const grid: Grid = FATE_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const fateBirthdayMode: DailyModeRules = {
+  kind: 'pyramid',
+  id: 'birthday-fate-2026-06-30',
+  name: 'Happy 59 Fate',
+  subtitle: 'Joyeux anniversaire 🎂',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(236,72,153,0.32) 0%, rgba(251,113,133,0.22) 50%, rgba(248,113,113,0.18) 100%)',
+    cardBorder: '1px solid rgba(236,72,153,0.5)',
+    cardShadow: '0 0 32px rgba(236,72,153,0.22)',
+    accent: '#ec4899',
+    accentSoft: 'rgba(236,72,153,0.7)',
+    slotBg: 'rgba(236,72,153,0.14)',
+    slotBorder: '1px solid rgba(236,72,153,0.3)',
+    buttonBg: 'rgba(236,72,153,0.55)',
+    buttonBorder: '1px solid rgba(236,72,153,0.35)',
+  },
+  generate(seed, trie) {
+    return generateFateBirthdayGrid(seed, trie)
+  },
+}
+
 // ─── Marathon : 3 grilles d'affilée ───────────────────────────────────────────
 
 export const marathonMode: MarathonMode = {
@@ -454,6 +506,7 @@ export const marathonMode: MarathonMode = {
 
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
+  [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
   '2026-05-17': marathonMode,
 }

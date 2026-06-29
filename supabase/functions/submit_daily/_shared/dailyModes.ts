@@ -240,6 +240,38 @@ export const birthdayMode: PyramidMode = {
   },
 }
 
+// Anniversaire Fate 30/06/2026 : grille 4×4 entièrement fixe (déterministe)
+const FATE_BIRTHDAY_DATE = '2026-06-30'
+
+const FATE_GRID_LETTERS: string[][] = [
+  ['a', 'm', 'o', 'u'],
+  ['m', 's', 's', 'r'],
+  ['a', 'e', 'i', 'a'],
+  ['n', 't', 'b', 'p'],
+]
+
+function generateFateBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const grid: Grid = FATE_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const fateBirthdayMode: PyramidMode = {
+  kind: 'pyramid',
+  id: 'birthday-fate-2026-06-30',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  generate(seed, trie) {
+    return generateFateBirthdayGrid(seed, trie)
+  },
+}
+
 export const marathonMode: MarathonMode = {
   kind: 'marathon',
   id: 'marathon',
@@ -272,6 +304,7 @@ export const marathonMode: MarathonMode = {
 
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
+  [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
 }
 

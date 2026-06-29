@@ -125,7 +125,9 @@ export default function HomeScreen({
 
   const { cardBg, cardBorder, cardShadow, accent, accentSoft, slotBg, slotBorder, buttonBg, buttonBorder } = todayMode.palette;
   const isBirthday = todayMode.id === "birthday-2026-04-30";
-  const sixties = isBirthday
+  const isFateBirthday = todayMode.id === "birthday-fate-2026-06-30";
+  const birthdayNumber = isBirthday ? "60" : isFateBirthday ? "59" : null;
+  const floatingNumbers = birthdayNumber
     ? Array.from({ length: 14 }, (_, i) => ({
         top: (i * 37 + 13) % 90,
         left: (i * 53 + 7) % 92,
@@ -318,7 +320,7 @@ export default function HomeScreen({
                 overflow: "hidden",
               }}
             >
-              {sixties.map((s, i) => (
+              {floatingNumbers.map((s, i) => (
                 <span
                   key={i}
                   style={{
@@ -335,7 +337,7 @@ export default function HomeScreen({
                     userSelect: "none",
                   }}
                 >
-                  60
+                  {birthdayNumber}
                 </span>
               ))}
               <div style={{ padding: "1.25rem 1.25rem 1rem", position: "relative" }}>

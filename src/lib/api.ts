@@ -99,8 +99,23 @@ export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEn
     .order('created_at', { ascending: true })  // tiebreaker : premier qui finit gagne
     .limit(20)
   if (error) { console.error('fetchDailyLeaderboard:', error); return [] }
-  return (data ?? []).map((row, i) => ({
-    rank: i + 1,
+  const rows = data ?? []
+  // Olympic ranking : 2 joueurs avec même (score, elapsed_secs) → même rang,
+  // le suivant saute (1, 1, 3, 4...). created_at est seulement un tiebreaker
+  // d'ordre d'affichage, pas de rang.
+  const ranks: number[] = []
+  rows.forEach((row, i) => {
+    if (i > 0) {
+      const prev = rows[i - 1]
+      if (prev.score === row.score && prev.elapsed_secs === row.elapsed_secs) {
+        ranks.push(ranks[i - 1])
+        return
+      }
+    }
+    ranks.push(i + 1)
+  })
+  return rows.map((row, i) => ({
+    rank: ranks[i],
     user_id: row.user_id,
     display_name: (row.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
     elapsed_secs: row.elapsed_secs,

@@ -288,7 +288,7 @@ export default function LeaderboardDrawer({
               const displayScore = entry.score + Math.max(0, 4 - entry.rank);
               return (
                 <div
-                  key={entry.rank}
+                  key={entry.user_id}
                   onClick={() => openProfile(entry.user_id, entry.display_name)}
                   style={{ cursor: "pointer", display: "flex", alignItems: "center", padding: "0.75rem 1rem", borderRadius: "0.875rem", background: entry.is_me ? "rgba(217,119,6,0.1)" : "rgba(30,41,59,0.8)", border: entry.is_me ? "1px solid rgba(217,119,6,0.3)" : "1px solid rgba(71,85,105,0.25)", gap: "0.5rem" }}
                 >

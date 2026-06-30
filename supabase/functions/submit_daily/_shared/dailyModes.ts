@@ -16,6 +16,7 @@ export interface PyramidMode {
   readonly maxWordLen: number
   readonly pyramidLengths: readonly number[]
   readonly minWordsAtCap?: number
+  readonly maxWordsAtCap?: number
   generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 
@@ -101,10 +102,12 @@ function generatePyramidGrid(
   size: number,
   maxWordLen: number,
   pyramidLengths: readonly number[],
-  minWordsAtCap: number
+  minWordsAtCap: number,
+  maxWordsAtCap?: number
 ): { grid: Grid; validWords: Set<string> } {
   const numericSeed = seedFromString(seed)
   const rand = mulberry32(numericSeed)
+  const cap = pyramidLengths[pyramidLengths.length - 1]
 
   let bestGrid: Grid | null = null
   let bestWords: Set<string> = new Set()
@@ -114,6 +117,18 @@ function generatePyramidGrid(
     const grid = generateRandomGrid(rand, size)
     const words = findAllWords(grid, trie, 3, maxWordLen)
     if (hasPyramidCoverage(words, pyramidLengths, minWordsAtCap)) {
+      if (maxWordsAtCap !== undefined) {
+        const longCount = [...words].filter((w) => w.length >= cap).length
+        if (longCount > maxWordsAtCap) {
+          const score = pyramidCoverageScore(words, pyramidLengths, minWordsAtCap)
+          if (score > bestScore) {
+            bestScore = score
+            bestGrid = grid
+            bestWords = words
+          }
+          continue
+        }
+      }
       return { grid, validWords: words }
     }
     const score = pyramidCoverageScore(words, pyramidLengths, minWordsAtCap)
@@ -146,6 +161,7 @@ export const classicMode: PyramidMode = {
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
   minWordsAtCap: 2,
+  maxWordsAtCap: 5,
   generate(seed, trie) {
     return generatePyramidGrid(
       effectiveSeed(seed),
@@ -153,7 +169,8 @@ export const classicMode: PyramidMode = {
       this.size,
       this.maxWordLen,
       this.pyramidLengths,
-      this.minWordsAtCap ?? 1
+      this.minWordsAtCap ?? 1,
+      this.maxWordsAtCap
     )
   },
 }

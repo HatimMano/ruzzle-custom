@@ -42,6 +42,9 @@ export interface PyramidMode extends DailyModeBase {
   // Nombre minimum de mots requis au niveau plafond (le dernier de pyramidLengths,
   // qui agit comme "≥"). Permet de garantir des alternatives au mot le plus long.
   readonly minWordsAtCap?: number
+  // Nombre MAXIMUM de mots au niveau plafond (≥ cap). Rejette les grilles trop
+  // riches en longs mots pour garder de la difficulté. undefined = pas de cap.
+  readonly maxWordsAtCap?: number
   generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 
@@ -204,10 +207,12 @@ function generatePyramidGrid(
   size: number,
   maxWordLen: number,
   pyramidLengths: readonly number[],
-  minWordsAtCap: number
+  minWordsAtCap: number,
+  maxWordsAtCap?: number
 ): { grid: Grid; validWords: Set<string> } {
   const numericSeed = seedFromString(seed)
   const rand = mulberry32(numericSeed)
+  const cap = pyramidLengths[pyramidLengths.length - 1]
 
   let bestGrid: Grid | null = null
   let bestWords: Set<string> = new Set()
@@ -218,6 +223,20 @@ function generatePyramidGrid(
     const words = findAllWords(grid, trie, 3, maxWordLen)
 
     if (hasPyramidCoverage(words, pyramidLengths, minWordsAtCap)) {
+      // Cap "trop riche" : on rejette si on dépasse maxWordsAtCap
+      if (maxWordsAtCap !== undefined) {
+        const longCount = [...words].filter((w) => w.length >= cap).length
+        if (longCount > maxWordsAtCap) {
+          // Garder quand même comme fallback si meilleur que rien
+          const score = pyramidCoverageScore(words, pyramidLengths, minWordsAtCap)
+          if (score > bestScore) {
+            bestScore = score
+            bestGrid = grid
+            bestWords = words
+          }
+          continue
+        }
+      }
       return { grid, validWords: words }
     }
 
@@ -255,6 +274,7 @@ export const classicMode: DailyModeRules = {
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
   minWordsAtCap: 2,
+  maxWordsAtCap: 5,
   palette: {
     cardBg: 'linear-gradient(135deg, rgba(217,119,6,0.3) 0%, rgba(234,179,8,0.1) 100%)',
     cardBorder: '1px solid rgba(217,119,6,0.45)',
@@ -273,7 +293,8 @@ export const classicMode: DailyModeRules = {
       this.size,
       this.maxWordLen,
       this.pyramidLengths,
-      this.minWordsAtCap ?? 1
+      this.minWordsAtCap ?? 1,
+      this.maxWordsAtCap
     )
   },
 }
@@ -314,7 +335,8 @@ export const bigriddleMode: DailyModeRules = {
       this.size,
       this.maxWordLen,
       this.pyramidLengths,
-      this.minWordsAtCap ?? 1
+      this.minWordsAtCap ?? 1,
+      this.maxWordsAtCap
     )
   },
 }

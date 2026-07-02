@@ -15,6 +15,145 @@ Format type :
 
 ---
 
+## 2026-07-01 — Cap 5 mots ≥8L sur mode Classique
+
+**Trigger** : les grilles classiques devenaient trop faciles — trop de longs mots disponibles rendaient le plafond de la pyramide (8L) trivialement remplissable. Perte de challenge stratégique pour les joueurs habitués.
+
+**Options envisagées** :
+- a) Baisser le plafond de la pyramide (3→7 au lieu de 3→8)
+- b) **Rejeter les grilles avec >5 mots ≥8L** au générateur
+- c) Augmenter `minWordsAtCap` (force plus de mots mais compte pas la richesse totale)
+
+**Choix** : b) `maxWordsAtCap: 5` sur `classicMode`.
+
+**Pourquoi** :
+- Préserve la pyramide 3→8 (identité du jeu inchangée).
+- Rareté des long mots = récompense la recherche stratégique.
+- Test empirique : 6 dates futures trouvent une grille valide en 1-4 essais → aucune contrainte perf.
+
+**Tradeoffs assumés** :
+- Le générateur peut occasionnellement fallback sur la meilleure grille non-conforme (score-based) si aucune ne passe le cap. Rare mais possible.
+- Ne s'applique QU'À classique : BiGriddle garde ses grilles riches (défi dominical).
+
+**À surveiller** :
+- Les 2 copies du générateur doivent rester sync (`src/lib/dailyModes.ts` + `supabase/functions/submit_daily/_shared/dailyModes.ts`). Si un joueur a un JS mis en cache d'AVANT le deploy, il générera une grille différente que celle du serveur → soumission rejetée en silence.
+- Si extension à Triddle/BiGriddle : réévaluer le seuil (leurs caps sont 7 et 10 respectivement, "≥cap" a un autre sens).
+
+---
+
+## 2026-06-30 — Olympic ranking (ex-aequo acceptés) sur classement jour + agrégats
+
+**Trigger** : les joueurs voulaient que 2 ex-aequo parfaits (même score ET même temps) affichent le même rang. Avant : `created_at` cassait toujours l'égalité de manière invisible.
+
+**Choix** :
+- **Classement Jour** : Olympic ranking calculé en JS (forward pass sur les résultats déjà triés par score/elapsed_secs/created_at). Same rank si (score, elapsed_secs) identiques. `created_at` reste tiebreaker d'ordre d'affichage seulement.
+- **Classement Semaine/Mois** : `rank()` Postgres avec tiebreakers `points DESC, top1 DESC, top2 DESC, total_played ASC` (jouer moins pour même résultat = mieux classé). Égalité parfaite = même rang → bonus hebdo partagé (2 top1 ex-aequo → +5 chacun, suivant à rang 3 = +1).
+
+**Pourquoi** :
+- Effet Olympic (1, 1, 3, 4...) plus juste que 1, 2 sur base created_at.
+- Le rank Postgres fait naturellement du "skip" après tie.
+- Le forward pass JS est plus simple qu'une RPC pour 20 lignes / jour.
+
+**À surveiller** :
+- `key={entry.user_id}` obligatoire dans les .map() React (pas `entry.rank` qui peut être dupliqué).
+- La colonne `rank` du RPC `top_aggregated_players` est calculée côté SQL — le front l'affiche directement (pas de `i+1`).
+
+---
+
+## 2026-06-30 — Mode anniversaire Fate + script d'optimisation de grille
+
+**Trigger** : 59 ans de Fate. Envie d'un mode spécial dans l'esprit de `birthday-2026-04-30` (60 ans) mais qui embarque plusieurs mots thématiques (MAMAN, AMOUR, BISOU) dans la grille.
+
+**Options envisagées** :
+- a) Grille aléatoire seedée + insertion forcée d'un mot (comme birthday 60)
+- b) **Grille 100% fixe** optimisée par script offline avec DFS + trie
+- c) Générateur avec contraintes multiples (path finding runtime)
+
+**Choix** : b). Grille déterministe hardcodée dans le mode :
+```
+A M O U
+M S S R
+A E I A
+N T B P
+```
+
+**Pourquoi** :
+- 3 mots forcés (MAMAN + AMOUR + BISOU) = trop de contraintes pour un générateur runtime (retry cost).
+- Script offline (`scripts/optimize-birthday-fate.mjs`) teste 30k combinaisons des 5 cases libres, garde la meilleure au sens weighted-score par longueur.
+- Résultat : 508 mots dont 34 mots de 8L, 12 de 9L, 4 de 10L. Pyramide 3→8 confortable.
+
+**Tradeoffs assumés** :
+- Grille identique pour tout le monde (pas de "seed personnel" — mais c'est le cas pour tous les daily, c'est l'esprit).
+- Le pattern "script offline pour thématique" ne scale pas si on veut 1 grille thématique par semaine.
+
+**À surveiller** :
+- Le script `optimize-birthday-fate.mjs` peut être réutilisé pour d'autres thèmes. Modifier `FIXED` et `FREE_CELLS`, re-run.
+- Sync obligatoire vers `_shared/dailyModes.ts` + redéploiement Edge Function AVANT la date d'activation, sinon soumissions rejetées.
+
+---
+
+## 2026-06-29 — Profil joueur cliquable + badges 🏆 mois remportés
+
+**Trigger** : les joueurs voulaient voir les stats des autres pour la compétition et la comparaison. Besoin aussi d'un signe de "vieux briscard" (mois gagnés).
+
+**Options envisagées** :
+- a) Nouvelle modale au-dessus du drawer classement
+- b) **Navigation interne au drawer** (clic → vue profil, bouton retour)
+- c) Onglet Stats dédié dans le drawer
+
+**Choix** : b). Le clic sur une ligne remplace le contenu du drawer par la vue profil.
+
+**Pourquoi** :
+- Pas de superposition de drawers (moche visuellement, z-index hell).
+- Pattern mobile-native compréhensible.
+- Onglet dédié = trop lourd pour cette itération.
+
+**Backend** :
+- Nouvelle RPC `player_profile_stats(user_id uuid)` retournant top1/2/3 all-time, week_wins, month_wins, longest_word, fastest_complete_secs.
+- Ajout de `month_wins` colonne à `top_aggregated_players` pour afficher les badges.
+- Coût de calcul acceptable à notre échelle (~1500 daily_results). À reconsidérer > 10k joueurs → materialized view.
+
+**Affordance visuelle** :
+- Chevron `›` à droite de chaque ligne (Jour + Classement).
+- Badges 🏆 × month_wins collés au pseudo dans le Classement (max 3 + "+N" si plus).
+
+---
+
+## 2026-06-28 — Timezone Europe/Paris pour les bornes semaine/mois SQL
+
+**Trigger** : lundi 29/06 à 00:30 heure de Paris, le classement Semaine affichait encore la semaine précédente. Cause : `current_date` en Postgres = date UTC. À 00:30 CEST (UTC+2), UTC est encore la veille.
+
+**Choix** : remplacer partout `current_date` → `(now() at time zone 'Europe/Paris')::date` dans les RPC.
+
+**Pourquoi** : les joueurs sont majoritairement à Paris (CEST). La date du jour côté client est déjà locale (`getDate()` sur `Date`). Aligner le SQL sur Paris = cohérent.
+
+**À surveiller** :
+- Si le jeu passe international, cette timezone hardcodée poserait problème. Solution future : timezone par utilisateur, mais overkill pour l'instant.
+- Sync côté client : `todayString()` dans `src/lib/url.ts` utilise `getDate()` local → dépend du navigateur du joueur. Si joueur en UTC−5, sa "date d'aujourd'hui" ≠ Paris. Cas rare.
+
+---
+
+## 2026-06-27 — Fusion des comptes doublons via SQL manuel
+
+**Trigger** : plusieurs joueurs avaient plusieurs comptes (auth anonyme + changement de pseudo + changement de device). Ex : Ay/Aymane, Kmano/Khouzema, Arva×2, DreamTim×3, HatimIL×2, Rafik×2, Kis×5.
+
+**Choix** : fonction SQL `merge_user(from_id, to_id)` qui :
+1. Gère les collisions `daily_results` (unique sur `user_id, date`) → garde le meilleur des deux résultats.
+2. Réattribue `game_results` (pas de contrainte).
+3. Recompute `player_stats` de zéro depuis `daily_results + game_results` (les triggers ne réagissent qu'à INSERT, pas UPDATE → sinon stats désynchronisées).
+4. Supprime le profil source.
+
+**Pourquoi le recompute plutôt que INSERT+ON CONFLICT** :
+- Les triggers `update_stats_on_daily` / `update_stats_on_game` ne firent que sur INSERT.
+- ON CONFLICT ne mergerait que 5 colonnes sur 17 → stats partielles.
+- Fonction `recompute_player_stats(uid)` réagrège proprement depuis `daily_results`/`game_results`.
+
+**À surveiller** :
+- Nouveaux comptes doublons à surveiller mensuellement. Solution long terme = auth email (dans backlog).
+- Si nouvelle colonne dans `player_stats`, penser à mettre à jour `recompute_player_stats`.
+
+---
+
 ## 2026-06-28 — Classement Semaine/Mois + bonus hebdo (remplace cumul/mensuel)
 
 **Trigger** : le classement all-time était biaisé envers les anciens joueurs (impossible de rattraper le top après 2-3 semaines de retard) → frustration des nouveaux. Besoin d'une compétition qui se renouvelle.

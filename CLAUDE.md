@@ -96,12 +96,14 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 
 ### Sync Edge Function : règle d'or
 S'applique aux **modes pyramide uniquement** (Ruddle/Speedle passent par insert direct client, cf. Anti-cheat). Toute modification qui affecte le calcul serveur doit être répercutée dans [`supabase/functions/submit_daily/_shared/`](supabase/functions/submit_daily/_shared/) **avant** ou en même temps que le deploy Vercel. Fichiers concernés typiques :
-- `dailyModes.ts` (nouveau mode pyramide, nouvelle date spéciale, `maxWordsAtCap`, etc.)
+- `dailyModes.ts` (nouveau mode pyramide, nouvelle date spéciale, `maxWordsAtCap`, `SUNDAY_CYCLE`, etc.)
 - `gridGenerator.ts` (logique de génération, distribution des lettres)
 - `dictionary.ts` (mots ajoutés/retirés)
 - `scoring.ts` (règles de points)
 
 Sans redéploiement de l'Edge Function, les soumissions pyramide des joueurs seront **rejetées silencieusement** (le serveur régénère une grille différente que celle vue par le client).
+
+**Sync unifiée depuis 2026-07-05** : le server connaît maintenant Ruddle/Speedle (types minimaux, sans generate) + la rotation dimanche à 3 modes. Si un claim ruddle/speedle arrive à l'edge function (bug ou tentative), elle renvoie `400 { error: 'submit_via_direct_insert' }`. Le server est également l'autorité pour le dispatch dimanche : `SUNDAY_CYCLE` doit rester en sync côté client + server.
 
 ### Scripts d'optimisation offline
 Pour les grilles thématiques (anniversaires, événements), utiliser un script node en DFS sur la grille avec le trie du dico complet. Exemple : [`scripts/optimize-birthday-fate.mjs`](scripts/optimize-birthday-fate.mjs) — teste 30k combinaisons des cases libres et garde la meilleure au sens weighted-score par longueur. Réutilisable : modifier `FIXED` (cases fixes) et `FREE_CELLS`, re-run.

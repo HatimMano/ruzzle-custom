@@ -15,6 +15,85 @@ Format type :
 
 ---
 
+## 2026-07-05 — Rotation dimanche 3 modes + unification edge function
+
+**Trigger** : ajout de Speedle au calendrier. On voulait un défi spécial le dimanche différent chaque semaine, sans casser Triddle/BiGriddle déjà en place. L'edge function était par ailleurs désynchronisée du client depuis le renaming Marathon→Triddle et l'ajout Ruddle/Speedle (client sait, server pas).
+
+**Options envisagées** :
+- a) Ajouter Speedle en one-shot via `SPECIAL_DATES['2026-07-12']` — simple mais rigide, il faudra le refaire pour la 3e occurrence
+- b) **Rotation à 3 modes `[triddle, speedle, bigriddle]` via `sundayMode()`** — élégant, auto-alimenté, sync client/server
+- c) 4 modes rotation en incluant Ruddle — mais Ruddle n'est pas "sunday material" (2min = trop court pour un défi hebdo spécial)
+
+**Choix** : b) rotation 3 modes, unifiée client + server.
+
+**Pourquoi** :
+- Auto-alimente : ajoute juste une position dans `SUNDAY_CYCLE` pour un nouveau mode dimanche.
+- Modulo positif `((x % n) + n) % n` protège contre les dates avant `SUNDAY_REF` (utile côté server pour valider des vieux résultats).
+- Client et server calculent le MÊME `sundayMode()` : évite tout mismatch silencieux.
+
+**Détails implémentation** :
+- Client [`src/lib/dailyModes.ts`](../src/lib/dailyModes.ts) : `SUNDAY_CYCLE = [triddleMode, speedleMode, bigriddleMode]`.
+- Server [`supabase/functions/submit_daily/_shared/dailyModes.ts`](../supabase/functions/submit_daily/_shared/dailyModes.ts) : `SUNDAY_CYCLE = [marathonMode, speedleMode, bigriddleMode]` (marathonMode car `id='marathon'` conservé pour compat DB).
+- Server ajoute `RuddleMode`/`SpeedleMode` types (minimal, sans generate) + `isRuddleMode`/`isSpeedleMode` guards.
+- Server `modeForDate` accepte tous les overrides du client : `triddle|marathon|bigriddle|classic|ruddle|eclair|speedle|infini`.
+- Server `index.ts` renvoie `400 { error: 'submit_via_direct_insert' }` si un claim Ruddle/Speedle arrive quand même via l'edge function (défense en profondeur — normalement bloqué par `DIRECT_INSERT_MODES` côté client).
+
+**Tradeoffs assumés** :
+- Le server n'a pas de `generate()` pour Ruddle/Speedle → si un jour on veut de l'anti-cheat sur ces modes, il faudra porter le générateur générique + définir un canonique pour "max de mots trouvés" (assez trivial vs pyramide).
+- La rotation est hardcodée dans le code. Modifier l'ordre = deploy client + server + Cloud Build. Acceptable vu la simplicité.
+
+**À surveiller** :
+- **Sync obligatoire** : toute modification de `SUNDAY_CYCLE` doit être répercutée sur client + server AVANT deploy. Sinon un joueur qui a du JS mis en cache d'AVANT le deploy générera une grille différente que celle du server → mode mismatch. La règle d'or "sync Edge Function" du CLAUDE.md tient.
+- **Compat historique** : les résultats stockés en base avant 2026-07-05 avec `mode='marathon'` restent valides — le server accepte le claim `'marathon'` toujours, et le kind côté server est `'marathon'` (id inchangé).
+- Ruddle/Speedle sur le server = types nus. Si un mainteneur veut ajouter un vrai check anti-cheat, il devra créer un vrai generate() + une logique canonique.
+
+---
+
+## 2026-07-04 — Modes Ruddle + Speedle + Pattern ModeAdapter
+
+**Trigger** : ajout de 2 modes non-pyramidaux (Ruddle = 2min chrono max de mots, Speedle = sablier 45s survie). Impossible à faire proprement avec l'archi précédente où chaque mode ajoutait ~50 lignes dans App.tsx (états, callbacks, branches de rendu). App.tsx faisait déjà 810 lignes.
+
+**Options envisagées** :
+- a) Refacto minimal : extraire un `buildSubmitPayload(mode, result)` centralisé, garder tout le reste inline. Effort ~30 min. Résultat : App.tsx ~500 lignes, ~50 lignes/nouveau mode.
+- b) **Pattern ModeAdapter complet** : 1 fichier `src/lib/modes/<mode>.tsx` par mode avec `init/GameScreen/ResultsScreen/buildSubmitPayload`. Dispatch par kind dans `registry.ts`. Effort ~2h. Résultat : App.tsx ~450 lignes, ~1 fichier/nouveau mode.
+
+**Choix** : b) ModeAdapter complet.
+
+**Pourquoi** :
+- 4 modes existants (Pyramide/Marathon/Ruddle/Speedle) + roadmap qui parle de mode Thématique / Achievements / mode anniv 30 ans → 5+ modes probables sous 6 mois.
+- Option a) devient un pansement au mode 5. La refaire 2 fois = plus cher que faire b) une fois.
+- Long-term thinking : "evolvable choices over quick but rigid" (règle CLAUDE.md).
+
+**Détails implémentation** :
+- Interface `ModeAdapter<TState, TResult>` dans [`src/lib/modes/types.ts`](../src/lib/modes/types.ts).
+- 4 adapters : `pyramid.tsx`, `triddle.tsx`, `ruddle.tsx`, `speedle.tsx`. Chacun expose `init(mode, date, trie): TState`, `GameScreen`, `ResultsScreen`, `buildSubmitPayload`.
+- Registry [`src/lib/modes/registry.ts`](../src/lib/modes/registry.ts) : dispatch `switch (mode.kind)`.
+- App.tsx passe de 810 → 451 lignes. State opaque (`modeState`, `modeResult` typés `unknown`), rendu délégué à `adapter.GameScreen` / `adapter.ResultsScreen`.
+- PyramidGameScreen extrait de App.tsx (215 lignes) — encapsule countdown/session persist/handleWordSubmit/useTimeReminder.
+- Hook réutilisable `useCountdown` + composant `CountdownScreen` (fullscreen 3-2-1-Go) partagés par tous les modes.
+- Composants partagés `results/LeaderboardTab.tsx` + `results/WordsListTab.tsx` + `leaderboard/WordCountStrip.tsx`.
+
+**Renaming** : Marathon → Triddle partout dans le code (types, fichiers, adapters) MAIS `mode.id='marathon'` conservé pour compat DB (résultats existants du test 2026-05-17). Le server accepte toujours claim `'marathon'`. Détail commenté dans dailyModes.ts.
+
+**Anti-cheat asymétrique** :
+- Modes pyramide (Pyramiddle/BiGriddle/Triddle) : anti-cheat serveur via Edge Function comme avant.
+- Modes non-pyramide (Ruddle/Speedle) : insert direct client dans `daily_results`, RLS `auth.uid = user_id`. Assumé v1 car pas de canonique pyramidal.
+
+**Scoring** :
+- Ruddle : `scoreForWord` standard cumulé, `elapsed_secs=120` constant.
+- Speedle : score composite 3 tiers `survivedSecs*1M + wordCount*100 + maxWordLen`. Ordre : survie > nb mots > mot le plus long. Bonus temps par mot en courbe convexe `3=1..8+=15` (dans `speedleScoring.ts` partagé).
+- Leaderboard filtré par `mode.id` (fetchDailyLeaderboard signature étendue).
+
+**Tradeoffs assumés** :
+- Insert direct client Ruddle/Speedle = pas d'anti-cheat serveur. Acceptable en v1, à durcir si le jeu prend.
+- ~50 lignes de shell dupliquées dans RuddleResultsScreen / SpeedleResultsScreen / TriddleResultsScreen. Un `DailyResultsShell` factorisable si on ajoute un 4e mode non-pyramide.
+
+**À surveiller** :
+- Ajout d'un nouveau mode = 3 fichiers minimum : `src/lib/modes/<mode>.tsx` + `<Mode>GameScreen.tsx` + `<Mode>ResultsScreen.tsx` + entrée dans registry. Bien documenter le pattern dans CLAUDE.md.
+- Sync client/server côté dailyModes.ts pour les kinds — si on ajoute un mode qui doit passer par l'edge function, ne pas oublier de le porter côté server ET de gérer son kind dans index.ts.
+
+---
+
 ## 2026-07-01 — Cap 5 mots ≥8L sur mode Classique
 
 **Trigger** : les grilles classiques devenaient trop faciles — trop de longs mots disponibles rendaient le plafond de la pyramide (8L) trivialement remplissable. Perte de challenge stratégique pour les joueurs habitués.

@@ -11,6 +11,8 @@ import {
   modeForDate,
   isMarathonMode,
   isPyramidMode,
+  isRuddleMode,
+  isSpeedleMode,
   pyramidSlotForWord,
   type DailyMode,
 } from './_shared/dailyModes.ts'
@@ -158,6 +160,13 @@ Deno.serve(async (req) => {
     if (mode.id !== claimedId) {
       return jsonResponse({ error: 'mode_mismatch', expected: mode.id, got: claimedId }, 400)
     }
+  }
+
+  // Ruddle/Speedle : anti-cheat non implémenté côté serveur (score non pyramidal, pas de canonique).
+  // Ces modes sont censés être soumis via insert direct client (DIRECT_INSERT_MODES). Si on reçoit
+  // un claim ruddle/speedle ici, c'est probablement un bug côté client (ou une tentative). On refuse.
+  if (isRuddleMode(mode) || isSpeedleMode(mode)) {
+    return jsonResponse({ error: 'submit_via_direct_insert', mode: mode.id }, 400)
   }
 
   // Charge le dico

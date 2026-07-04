@@ -32,13 +32,31 @@ export interface MarathonMode {
   generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
 }
 
-export type DailyMode = PyramidMode | MarathonMode
+// Ruddle/Speedle : modes côté serveur uniquement pour cohérence dispatch.
+// Ils passent par insert direct client (bypass anti-cheat), donc pas de generate ici.
+// Si l'edge function reçoit un claim ruddle/speedle, elle renvoie une erreur explicite.
+export interface RuddleMode {
+  readonly kind: 'ruddle'
+  readonly id: string
+}
+export interface SpeedleMode {
+  readonly kind: 'speedle'
+  readonly id: string
+}
+
+export type DailyMode = PyramidMode | MarathonMode | RuddleMode | SpeedleMode
 
 export function isPyramidMode(m: DailyMode): m is PyramidMode {
   return m.kind === 'pyramid'
 }
 export function isMarathonMode(m: DailyMode): m is MarathonMode {
   return m.kind === 'marathon'
+}
+export function isRuddleMode(m: DailyMode): m is RuddleMode {
+  return m.kind === 'ruddle'
+}
+export function isSpeedleMode(m: DailyMode): m is SpeedleMode {
+  return m.kind === 'speedle'
 }
 
 export function pyramidSlotForWord(
@@ -317,6 +335,11 @@ export const marathonMode: MarathonMode = {
   },
 }
 
+// ─── Ruddle / Speedle (défense en profondeur, pas de generate) ────────────────
+
+export const ruddleMode: RuddleMode = { kind: 'ruddle', id: 'ruddle' }
+export const speedleMode: SpeedleMode = { kind: 'speedle', id: 'speedle' }
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 const SPECIAL_DATES: Record<string, DailyMode> = {
@@ -330,12 +353,26 @@ function isSunday(date: string): boolean {
   return d.getUTCDay() === 0
 }
 
+// Dimanche = défi spécial en rotation depuis le 2026-07-05.
+// Cycle 3 semaines : Triddle (marathonMode) → Speedle → BiGriddle → Triddle → ...
+// DOIT rester en sync avec src/lib/dailyModes.ts côté client.
+const SUNDAY_REF = new Date('2026-07-05T00:00:00Z')
+const SUNDAY_CYCLE: readonly DailyMode[] = [marathonMode, speedleMode, bigriddleMode]
+function sundayMode(date: string): DailyMode {
+  const d = new Date(`${date}T00:00:00Z`)
+  const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))
+  const idx = ((weekOffset % SUNDAY_CYCLE.length) + SUNDAY_CYCLE.length) % SUNDAY_CYCLE.length
+  return SUNDAY_CYCLE[idx]
+}
+
 export function modeForDate(date: string, override?: string | null): DailyMode {
-  if (override === 'marathon') return marathonMode
+  if (override === 'triddle' || override === 'marathon') return marathonMode
   if (override === 'bigriddle') return bigriddleMode
   if (override === 'classic') return classicMode
+  if (override === 'ruddle' || override === 'eclair') return ruddleMode
+  if (override === 'speedle' || override === 'infini') return speedleMode
   const special = SPECIAL_DATES[date]
   if (special) return special
-  if (isSunday(date)) return bigriddleMode
+  if (isSunday(date)) return sundayMode(date)
   return classicMode
 }

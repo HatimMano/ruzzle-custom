@@ -35,7 +35,7 @@ function fmtTimer(secs: number): string {
 }
 
 export default function RuddleGameScreen({
-  mode, grid, validWords, onComplete, onAbandon, onRequestConfirm,
+  mode, grid, onComplete, onAbandon, onRequestConfirm,
 }: Props) {
   const [foundWords, setFoundWords] = useState<string[]>([])
   const [score, setScore] = useState(0)

@@ -641,12 +641,16 @@ function utcDay(date: string): number {
 function isSunday(date: string): boolean { return utcDay(date) === 0 }
 
 
-// Dimanche alterne Triddle / BiGriddle depuis le 2026-07-05 (semaine 0 = Triddle)
+// Dimanche = défi spécial en rotation depuis le 2026-07-05.
+// Cycle 3 semaines : Triddle → Speedle → BiGriddle → Triddle → ...
+// Modulo positif pour supporter les dates avant SUNDAY_REF.
 const SUNDAY_REF = new Date('2026-07-05T00:00:00Z')
+const SUNDAY_CYCLE: readonly DailyMode[] = [triddleMode, speedleMode, bigriddleMode]
 function sundayMode(date: string): DailyMode {
   const d = new Date(`${date}T00:00:00Z`)
   const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))
-  return weekOffset % 2 === 0 ? triddleMode : bigriddleMode
+  const idx = ((weekOffset % SUNDAY_CYCLE.length) + SUNDAY_CYCLE.length) % SUNDAY_CYCLE.length
+  return SUNDAY_CYCLE[idx]
 }
 
 export function modeForDate(date: string, override?: string | null): DailyMode {

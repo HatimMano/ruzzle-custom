@@ -6,6 +6,26 @@ Features et chantiers techniques à venir. Ordonnés par priorité. À déplacer
 
 ## Priorité haute
 
+### Mode anniversaire Hatim 30 ans (11/07/2026)
+
+**Deadline** : samedi 11/07/2026 (dans 6 jours au moment de l'ajout).
+
+**Concept** : mode pyramide spécial pour la journée. Grille 4×4 avec le mot **TRENTAINE** (9 lettres) placé en dur — le trouver donne une immense satisfaction et remplit d'un coup un long créneau pyramide. Rien de plus — pas d'ajout de mot secondaire, pas de mise en scène lourde.
+
+**Implémentation** :
+- Nouveau mode `birthday30Mode: PyramidMode` dans [`src/lib/dailyModes.ts`](src/lib/dailyModes.ts) sur le pattern de `birthdayMode` (30/04) / `fateBirthdayMode` (30/06).
+- Grille 4×4 pré-optimisée via un script `scripts/optimize-birthday-30.mjs` (dupliquer `optimize-birthday-fate.mjs`) : DFS + trie pour maximiser le nb de mots long autour de TRENTAINE fixé.
+- Placement TRENTAINE : chemin de 9 cases sur 16 respectant l'adjacence. Il en reste 7 pour le remplissage bruteforce optimisé.
+- Palette or/rose (au choix) + éventuellement chiffres "30" flottants en background via le check `isBirthday` dans HomeScreen (déjà en place, à étendre à birthday30).
+- Entrée dans `SPECIAL_DATES` : `'2026-07-11': birthday30Mode`.
+- Sync côté edge function `supabase/functions/submit_daily/_shared/dailyModes.ts` **impératif** (règle d'or) : le mode est pyramide donc validé serveur.
+
+**Effort estimé** : 1-1h30 (script d'opti + intégration + tests + sync edge + deploy).
+
+**Note perso** : premier mode "cadeau" du projet, faisable en dernière minute mais prévoir de le tester le 09 ou 10/07 pour ne pas se lever le jour J avec un bug.
+
+---
+
 ### Authentification email (magic link)
 
 **Pourquoi** : aujourd'hui auth anonyme uniquement. Chaque clear cache / changement de device / changement d'URL = perte du `user_id` et donc de tout l'historique. À l'épisode 25/06/2026 (rename rapide vers playgriddle puis rollback), on a frôlé la perte d'identité pour tous les joueurs actifs.

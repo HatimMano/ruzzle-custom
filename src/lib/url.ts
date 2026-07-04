@@ -32,7 +32,7 @@ export function setURLParams(seed: string, config: URLGameConfig) {
   window.history.replaceState({}, '', url)
 }
 
-// Override de mode pour test : ?mode=marathon, ?mode=bigriddle, etc.
+// Override de mode pour test : ?mode=triddle, ?mode=bigriddle, ?mode=ruddle, ?mode=speedle, etc.
 export function getModeOverride(): string | null {
   return new URLSearchParams(window.location.search).get('mode')
 }

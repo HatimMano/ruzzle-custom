@@ -1,19 +1,19 @@
-// Strip de progression dans le classement pour le marathon (Triddle).
+// Strip de progression dans le classement pour Triddle (3 grilles pyramide).
 // 1 dot par grille : doré si grille complète, vert si partielle, gris si vide.
 
-import type { MarathonMode } from "../../lib/dailyModes";
+import type { TriddleMode } from "../../lib/dailyModes";
 
 const COLOR_GOLD = "rgba(251,191,36,0.85)";
 const COLOR_GREEN = "rgba(16,185,129,0.75)";
 const COLOR_EMPTY = "rgba(71,85,105,0.3)";
 
 interface Props {
-  mode: MarathonMode;
+  mode: TriddleMode;
   pyramidFound: Record<string, unknown> | null;
 }
 
-export default function MarathonStrip({ mode, pyramidFound }: Props) {
-  // Marathon stocke pyramid_found nested : { "0": {3:..., 4:...}, "1": {...}, "2": {...} }
+export default function TriddleStrip({ mode, pyramidFound }: Props) {
+  // Triddle stocke pyramid_found nested : { "0": {3:..., 4:...}, "1": {...}, "2": {...} }
   const nested = (pyramidFound ?? {}) as Record<string, Record<number, string>>;
   const total = mode.pyramidLengths.length;
   return (

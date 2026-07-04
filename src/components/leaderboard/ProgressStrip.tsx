@@ -2,17 +2,22 @@
 // Pour ajouter un mode visuel : créer un composant XxxStrip dans ce dossier
 // puis ajouter un case ici. Aucun autre fichier à toucher.
 
-import { isMarathonMode, isPyramidMode, type DailyMode } from "../../lib/dailyModes";
+import { isTriddleMode, isPyramidMode, isRuddleMode, isSpeedleMode, type DailyMode } from "../../lib/dailyModes";
 import PyramidStrip from "./PyramidStrip";
-import MarathonStrip from "./MarathonStrip";
+import TriddleStrip from "./TriddleStrip";
+import WordCountStrip from "./WordCountStrip";
 
 interface Props {
   mode: DailyMode;
   pyramidFound: Record<string, unknown> | null;
+  wordCount?: number;  // pour les modes non-pyramide
 }
 
-export default function ProgressStrip({ mode, pyramidFound }: Props) {
-  if (isMarathonMode(mode)) return <MarathonStrip mode={mode} pyramidFound={pyramidFound} />;
+export default function ProgressStrip({ mode, pyramidFound, wordCount }: Props) {
+  if (isTriddleMode(mode)) return <TriddleStrip mode={mode} pyramidFound={pyramidFound} />;
   if (isPyramidMode(mode)) return <PyramidStrip mode={mode} pyramidFound={pyramidFound} />;
+  if ((isRuddleMode(mode) || isSpeedleMode(mode)) && typeof wordCount === 'number') {
+    return <WordCountStrip wordCount={wordCount} />;
+  }
   return null;
 }

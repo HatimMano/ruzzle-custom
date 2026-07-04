@@ -6,7 +6,7 @@ import { scoreForLen } from "../lib/scoring";
 import {
   pyramidSlotForWord,
   isPyramidComplete,
-  type MarathonMode,
+  type TriddleMode,
 } from "../lib/dailyModes";
 import { useScoreAnimation } from "../hooks/useScoreAnimation";
 import { playValid, playInvalid, playDuplicate } from "../lib/audio";
@@ -15,7 +15,7 @@ import type { Cell, Grid as GridType } from "../lib/gridGenerator";
 
 type FeedbackType = "valid" | "duplicate" | "invalid" | null;
 
-export interface MarathonResult {
+export interface TriddleResult {
   totalScore: number;
   totalElapsedSecs: number;
   foundWordsPerGrid: string[][];
@@ -23,11 +23,11 @@ export interface MarathonResult {
 }
 
 interface Props {
-  mode: MarathonMode;
+  mode: TriddleMode;
   grids: GridType[];
   validWordsPerGrid: Set<string>[];
-  onComplete: (result: MarathonResult) => void;
-  onAbandon: (partial: MarathonResult) => void;
+  onComplete: (result: TriddleResult) => void;
+  onAbandon: (partial: TriddleResult) => void;
   // Demande à l'app d'afficher une modal de confirmation. App appelle onYes si l'utilisateur valide.
   onRequestConfirm: (message: string, onYes: () => void) => void;
 }
@@ -42,7 +42,7 @@ function pyramidScore(pyramid: Record<number, string>): number {
   return Object.keys(pyramid).reduce((acc, k) => acc + scoreForLen(parseInt(k)), 0);
 }
 
-export default function MarathonGameScreen({ mode, grids, onComplete, onAbandon, onRequestConfirm }: Props) {
+export default function TriddleGameScreen({ mode, grids, onComplete, onAbandon, onRequestConfirm }: Props) {
   const [currentGridIndex, setCurrentGridIndex] = useState(0);
   const [currentFoundWords, setCurrentFoundWords] = useState<string[]>([]);
   const [currentPyramidFound, setCurrentPyramidFound] = useState<Record<number, string>>({});
@@ -61,7 +61,7 @@ export default function MarathonGameScreen({ mode, grids, onComplete, onAbandon,
   const currentScore = pyramidScore(currentPyramidFound);
   const totalScore = currentScore + pastResults.reduce((acc, r) => acc + pyramidScore(r.pyramidFound), 0);
 
-  const finishMarathon = useCallback(
+  const finishTriddle = useCallback(
     (allResults: { foundWords: string[]; pyramidFound: Record<number, string> }[]) => {
       clearInterval(tickerRef.current);
       const totalElapsedSecs = Math.floor((Date.now() - sessionStartedAtRef.current) / 1000);
@@ -84,7 +84,7 @@ export default function MarathonGameScreen({ mode, grids, onComplete, onAbandon,
     const allResults = [...pastResults, completedResult];
 
     if (currentGridIndex >= grids.length - 1) {
-      finishMarathon(allResults);
+      finishTriddle(allResults);
       return;
     }
 
@@ -102,7 +102,7 @@ export default function MarathonGameScreen({ mode, grids, onComplete, onAbandon,
       setTransitionInfo(null);
       advancingRef.current = false;
     }, 1500);
-  }, [currentFoundWords, currentPyramidFound, currentGridIndex, grids.length, mode.perGridDurationSecs, pastResults, finishMarathon]);
+  }, [currentFoundWords, currentPyramidFound, currentGridIndex, grids.length, mode.perGridDurationSecs, pastResults, finishTriddle]);
 
   // Auto-complétion : si la pyramide de la grille courante est pleine
   useEffect(() => {
@@ -185,7 +185,7 @@ export default function MarathonGameScreen({ mode, grids, onComplete, onAbandon,
               const remaining = grids.length - 1 - currentGridIndex;
               const message = remaining > 0
                 ? `Passer à la grille ${currentGridIndex + 2}/${grids.length} ? Pas de retour possible.`
-                : "Terminer le marathon maintenant ? Pas de retour possible.";
+                : "Terminer le Triddle maintenant ? Pas de retour possible.";
               onRequestConfirm(message, () => advanceGrid());
             }}
             style={{

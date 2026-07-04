@@ -2,6 +2,7 @@ import { mulberry32, seedFromString } from './prng'
 import { Trie } from './dictionary'
 import {
   generateRandomGrid,
+  generateGrid,
   findAllWords,
   weightedRandomLetter,
   type Grid,
@@ -48,8 +49,24 @@ export interface PyramidMode extends DailyModeBase {
   generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 
-export interface MarathonMode extends DailyModeBase {
-  readonly kind: 'marathon'
+export interface RuddleMode extends DailyModeBase {
+  readonly kind: 'ruddle'
+  readonly size: number
+  readonly durationSecs: number
+  readonly minWordLen: number
+  generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
+}
+
+export interface SpeedleMode extends DailyModeBase {
+  readonly kind: 'speedle'
+  readonly size: number
+  readonly startSecs: number
+  readonly minWordLen: number
+  generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
+}
+
+export interface TriddleMode extends DailyModeBase {
+  readonly kind: 'triddle'
   readonly size: number
   readonly maxWordLen: number
   readonly pyramidLengths: readonly number[]
@@ -59,7 +76,7 @@ export interface MarathonMode extends DailyModeBase {
   generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
 }
 
-export type DailyMode = PyramidMode | MarathonMode
+export type DailyMode = PyramidMode | TriddleMode | RuddleMode | SpeedleMode
 
 // Alias historique. Les helpers existants (pyramidLevelKey, isPyramidComplete,
 // pyramidRows, levelLabel) ne s'appliquent qu'aux PyramidMode.
@@ -69,12 +86,20 @@ export function isPyramidMode(mode: DailyMode): mode is PyramidMode {
   return mode.kind === 'pyramid'
 }
 
-export function isMarathonMode(mode: DailyMode): mode is MarathonMode {
-  return mode.kind === 'marathon'
+export function isTriddleMode(mode: DailyMode): mode is TriddleMode {
+  return mode.kind === 'triddle'
+}
+
+export function isRuddleMode(mode: DailyMode): mode is RuddleMode {
+  return mode.kind === 'ruddle'
+}
+
+export function isSpeedleMode(mode: DailyMode): mode is SpeedleMode {
+  return mode.kind === 'speedle'
 }
 
 // Plafond de scoring du mode (longueur du dernier niveau pyramide).
-export function scoreCap(mode: DailyMode): number {
+export function scoreCap(mode: PyramidLike): number {
   return mode.pyramidLengths[mode.pyramidLengths.length - 1]
 }
 
@@ -98,7 +123,7 @@ export function pyramidSlotForWord(
   return null
 }
 
-// Structurel : marche aussi bien pour PyramidMode que MarathonMode (les deux ont pyramidLengths)
+// Structurel : marche aussi bien pour PyramidMode que TriddleMode (les deux ont pyramidLengths)
 type PyramidLike = { pyramidLengths: readonly number[] }
 
 export function isPyramidComplete(
@@ -471,10 +496,13 @@ export const fateBirthdayMode: DailyModeRules = {
   },
 }
 
-// ─── Marathon : 3 grilles d'affilée ───────────────────────────────────────────
+// ─── Triddle : 3 grilles d'affilée ────────────────────────────────────────────
 
-export const marathonMode: MarathonMode = {
-  kind: 'marathon',
+export const triddleMode: TriddleMode = {
+  kind: 'triddle',
+  // id='marathon' conservé pour compat DB : les résultats du test grandeur nature
+  // du 2026-05-17 sont indexés sous ce nom, et l'edge function submit_daily accepte
+  // 'marathon' comme claim. Le nom code (Triddle*) reste aligné avec l'UI.
   id: 'marathon',
   name: 'Triddle',
   subtitle: '3 grilles · 5 min chacune · pyramide 3→7',
@@ -524,28 +552,111 @@ export const marathonMode: MarathonMode = {
   },
 }
 
+// ─── Ruddle : 2 minutes, max de mots 3L+ ─────────────────────────────────────
+
+export const ruddleMode: RuddleMode = {
+  kind: 'ruddle',
+  id: 'ruddle',
+  name: 'Ruddle',
+  subtitle: 'Défi du jour · 2 minutes · le plus de mots',
+  size: 4,
+  durationSecs: 120,
+  minWordLen: 3,
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(59,130,246,0.32) 0%, rgba(99,102,241,0.18) 100%)',
+    cardBorder: '1px solid rgba(59,130,246,0.5)',
+    cardShadow: '0 0 32px rgba(59,130,246,0.18)',
+    accent: '#60a5fa',
+    accentSoft: 'rgba(96,165,250,0.7)',
+    slotBg: 'rgba(59,130,246,0.14)',
+    slotBorder: '1px solid rgba(59,130,246,0.3)',
+    buttonBg: 'rgba(59,130,246,0.55)',
+    buttonBorder: '1px solid rgba(59,130,246,0.35)',
+  },
+  intro: {
+    title: 'Ruddle',
+    tagline: '2 minutes chrono',
+    bullets: [
+      'Trouve le plus de mots possible',
+      'Mots de 3 lettres minimum',
+      'Plus le mot est long, plus il rapporte',
+    ],
+    cta: 'Go !',
+  },
+  generate(seed, trie) {
+    return generateGrid(effectiveSeed(seed), trie, 3)
+  },
+}
+
+// ─── Speedle : sablier — commence à 45s, chaque mot ajoute du temps ───────────
+
+export const speedleMode: SpeedleMode = {
+  kind: 'speedle',
+  id: 'speedle',
+  name: 'Speedle',
+  subtitle: 'Défi du jour · résiste le plus longtemps',
+  size: 4,
+  startSecs: 45,
+  minWordLen: 3,
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(16,185,129,0.32) 0%, rgba(5,150,105,0.18) 100%)',
+    cardBorder: '1px solid rgba(16,185,129,0.5)',
+    cardShadow: '0 0 32px rgba(16,185,129,0.18)',
+    accent: '#34d399',
+    accentSoft: 'rgba(52,211,153,0.7)',
+    slotBg: 'rgba(16,185,129,0.14)',
+    slotBorder: '1px solid rgba(16,185,129,0.3)',
+    buttonBg: 'rgba(16,185,129,0.55)',
+    buttonBorder: '1px solid rgba(16,185,129,0.35)',
+  },
+  intro: {
+    title: 'Speedle',
+    tagline: 'Tiens face au sablier',
+    bullets: [
+      '45 secondes au départ',
+      'Chaque mot rallonge le sablier',
+      'Les mots longs rallongent bien plus (3L=+1s, 8L+=+15s)',
+      'Le jeu finit quand le sablier tombe',
+    ],
+    cta: 'Go !',
+  },
+  generate(seed, trie) {
+    return generateGrid(effectiveSeed(seed), trie, 3)
+  },
+}
+
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
-  '2026-05-17': marathonMode,
+  '2026-05-17': triddleMode,
 }
 
-// Dimanche = BiGriddle
-function isSunday(date: string): boolean {
-  // Attention : new Date('2026-05-10') interprète en UTC. On veut un jour stable.
+function utcDay(date: string): number {
+  return new Date(`${date}T00:00:00Z`).getUTCDay()
+}
+
+function isSunday(date: string): boolean { return utcDay(date) === 0 }
+
+
+// Dimanche alterne Triddle / BiGriddle depuis le 2026-07-05 (semaine 0 = Triddle)
+const SUNDAY_REF = new Date('2026-07-05T00:00:00Z')
+function sundayMode(date: string): DailyMode {
   const d = new Date(`${date}T00:00:00Z`)
-  return d.getUTCDay() === 0
+  const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))
+  return weekOffset % 2 === 0 ? triddleMode : bigriddleMode
 }
 
 export function modeForDate(date: string, override?: string | null): DailyMode {
-  if (override === 'marathon') return marathonMode
+  if (override === 'triddle' || override === 'marathon') return triddleMode
   if (override === 'bigriddle') return bigriddleMode
   if (override === 'classic') return classicMode
+  if (override === 'ruddle' || override === 'eclair') return ruddleMode
+  if (override === 'speedle' || override === 'infini') return speedleMode
   const special = SPECIAL_DATES[date]
   if (special) return special
-  if (isSunday(date)) return bigriddleMode
+  if (isSunday(date)) return sundayMode(date)
   return classicMode
 }

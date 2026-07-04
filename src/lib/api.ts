@@ -34,7 +34,7 @@ export async function setDisplayName(name: string): Promise<void> {
 // ─── Daily challenge ─────────────────────────────────────────────────────────
 
 // pyramid_found est jsonb côté DB. Pour les modes pyramide simples : Record<number, string>.
-// Pour marathon : Record<string, Record<number, string>> (clé = index de la grille).
+// Pour Triddle : Record<string, Record<number, string>> (clé = index de la grille).
 export type PyramidFoundPayload =
   | Record<number, string>
   | Record<string, Record<number, string>>
@@ -50,11 +50,12 @@ export interface DailyResultPayload {
   pyramidFound: PyramidFoundPayload
 }
 
-// Soumission via Edge Function `submit_daily` (anti-cheat) :
-// le serveur régénère la grille, valide chaque mot, recalcule le score canoniquement
-// et fait l'insert avec service role. Le client ne dicte plus le score.
-export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {
-  await ensureAuth()
+// Modes qui font insert direct client (pas d'anti-cheat serveur).
+// Les autres passent par l'Edge Function submit_daily qui régénère la grille
+// et recalcule le score canoniquement côté serveur.
+const DIRECT_INSERT_MODES = new Set(['ruddle', 'speedle'])
+
+async function submitDailyResultViaEdgeFunction(payload: DailyResultPayload): Promise<void> {
   const { data, error } = await supabase.functions.invoke('submit_daily', {
     body: {
       date: payload.date,
@@ -75,6 +76,40 @@ export async function submitDailyResult(payload: DailyResultPayload): Promise<vo
   console.log('[submitDailyResult] success', data)
 }
 
+async function submitDailyResultDirect(payload: DailyResultPayload): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const userId = session?.user?.id
+  if (!userId) { console.error('[submitDailyResult] no auth session'); return }
+  const { error } = await supabase.from('daily_results').insert({
+    user_id: userId,
+    date: payload.date,
+    mode: payload.mode,
+    elapsed_secs: Math.floor(payload.elapsedSecs),
+    completed: payload.completed,
+    levels_found: payload.levelsFound,
+    score: payload.score,
+    found_words: payload.foundWords,
+    pyramid_found: payload.pyramidFound,
+  })
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      console.warn('[submitDailyResult] already submitted for today')
+      return
+    }
+    console.error('[submitDailyResult] direct insert error:', error)
+    return
+  }
+  console.log('[submitDailyResult] direct insert success')
+}
+
+export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {
+  await ensureAuth()
+  if (DIRECT_INSERT_MODES.has(payload.mode)) {
+    return submitDailyResultDirect(payload)
+  }
+  return submitDailyResultViaEdgeFunction(payload)
+}
+
 export interface LeaderboardEntry {
   rank: number
   user_id: string
@@ -88,12 +123,14 @@ export interface LeaderboardEntry {
   mode: string
 }
 
-export async function fetchDailyLeaderboard(date: string): Promise<LeaderboardEntry[]> {
+export async function fetchDailyLeaderboard(date: string, mode?: string): Promise<LeaderboardEntry[]> {
   const myId = await getUserId()
-  const { data, error } = await supabase
+  let q = supabase
     .from('daily_results')
     .select('user_id, elapsed_secs, levels_found, score, completed, pyramid_found, mode, profiles(display_name)')
     .eq('date', date)
+  if (mode) q = q.eq('mode', mode)
+  const { data, error } = await q
     .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
     .order('created_at', { ascending: true })  // tiebreaker : premier qui finit gagne

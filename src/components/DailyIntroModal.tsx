@@ -39,7 +39,7 @@ export default function DailyIntroModal({ mode, onClose }: Props) {
         style={{
           width: "100%",
           maxWidth: "26rem",
-          background: cardBg,
+          background: `${cardBg}, #0f172a`,
           border: cardBorder,
           borderRadius: "1.5rem",
           padding: "1.75rem 1.5rem 1.5rem",

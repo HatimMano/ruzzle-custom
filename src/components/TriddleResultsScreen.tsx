@@ -4,21 +4,21 @@ import { scoreForLen, scoreForWord } from "../lib/scoring";
 import {
   pyramidRows,
   levelLabel,
-  type MarathonMode,
+  type TriddleMode,
 } from "../lib/dailyModes";
 import { findWordPath } from "../lib/gridGenerator";
 import type { Grid as GridType } from "../lib/gridGenerator";
 import Grid from "./Grid";
 import { fetchDailyLeaderboard } from "../lib/api";
 import type { LeaderboardEntry } from "../lib/api";
-import type { MarathonResult } from "./MarathonGameScreen";
+import type { TriddleResult } from "./TriddleGameScreen";
 
 type Tab = "pyramides" | "classement" | "mots";
 
 interface Props {
-  mode: MarathonMode;
+  mode: TriddleMode;
   date: string;
-  result: MarathonResult;
+  result: TriddleResult;
   grids: GridType[];
   validWordsPerGrid: Set<string>[];
   onBack: () => void;
@@ -40,7 +40,7 @@ const SCORE_STYLE: Record<number, { color: string; bg: string }> = {
   12: { color: "#f87171", bg: "rgba(239,68,68,0.2)" },
 };
 
-export default function MarathonResultsScreen({
+export default function TriddleResultsScreen({
   mode,
   date,
   result,
@@ -65,10 +65,10 @@ export default function MarathonResultsScreen({
     if (tab !== "classement") return;
     if (leaderboard.length > 0) return;
     setLeaderboardLoading(true);
-    fetchDailyLeaderboard(date)
+    fetchDailyLeaderboard(date, mode.id)
       .then(setLeaderboard)
       .finally(() => setLeaderboardLoading(false));
-  }, [tab, date, leaderboard.length]);
+  }, [tab, date, mode.id, leaderboard.length]);
 
   return (
     <div
@@ -96,7 +96,7 @@ export default function MarathonResultsScreen({
         {/* Header */}
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
           <p style={{ fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.14em", color: mode.palette.accentSoft, textTransform: "uppercase" }}>
-            🏃 Marathon · {date}
+            🏃 Triddle · {date}
           </p>
           <p style={{ fontSize: "1.9rem", fontWeight: 700, color: "white", lineHeight: 1.1 }}>
             {totalScore}

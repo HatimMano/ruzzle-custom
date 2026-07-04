@@ -5,6 +5,8 @@ import type { LeaderboardEntry, ModeRecord, PlayerStats, MyAggregateStats } from
 import {
   pyramidRows,
   levelLabel,
+  isRuddleMode,
+  isSpeedleMode,
   type DailyMode,
 } from "../lib/dailyModes";
 import HistoryDrawer from "./HistoryDrawer";
@@ -117,7 +119,7 @@ export default function HomeScreen({
     if (opening) {
       setLeaderboard([]);
       setLeaderboardLoading(true);
-      fetchDailyLeaderboard(date)
+      fetchDailyLeaderboard(date, todayMode.id)
         .then(setLeaderboard)
         .finally(() => setLeaderboardLoading(false));
     }
@@ -379,15 +381,41 @@ export default function HomeScreen({
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", marginBottom: "1.1rem" }}>
-                  {pyramidRows(todayMode).map((row, ri) => (
-                    <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>
-                      {row.map((len) => (
-                        <div key={len} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
-                          {levelLabel(todayMode, len)}
-                        </div>
-                      ))}
+                  {isRuddleMode(todayMode) ? (
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        {Math.floor(todayMode.durationSecs / 60)} min
+                      </div>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        max mots
+                      </div>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        {todayMode.minWordLen}L+
+                      </div>
                     </div>
-                  ))}
+                  ) : isSpeedleMode(todayMode) ? (
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        ⌛ {todayMode.startSecs}s
+                      </div>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        +s / mot
+                      </div>
+                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                        {todayMode.minWordLen}L+
+                      </div>
+                    </div>
+                  ) : (
+                    pyramidRows(todayMode).map((row, ri) => (
+                      <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>
+                        {row.map((len) => (
+                          <div key={len} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                            {levelLabel(todayMode, len)}
+                          </div>
+                        ))}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
               <button

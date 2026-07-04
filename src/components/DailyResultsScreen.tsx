@@ -131,10 +131,10 @@ export default function DailyResultsScreen({
     if (tab !== "classement") return;
     if (leaderboard.length > 0) return;
     setLeaderboardLoading(true);
-    fetchDailyLeaderboard(date)
+    fetchDailyLeaderboard(date, mode.id)
       .then(setLeaderboard)
       .finally(() => setLeaderboardLoading(false));
-  }, [tab, date, leaderboard.length]);
+  }, [tab, date, mode.id, leaderboard.length]);
 
   function copySummary() {
     const lines = [

@@ -14,7 +14,7 @@ interface GameConfig {
 
 interface Props {
   isDailyChallenge: boolean;
-  dailyMode: DailyModeRules;
+  dailyMode?: DailyModeRules;
   seed: string;
   score: number;
   streak: number;
@@ -228,7 +228,7 @@ export default function PlayingScreen({
         )}
 
         {/* Pyramid strip (daily) or found words strip (normal) */}
-        {isDailyChallenge ? (
+        {isDailyChallenge && dailyMode ? (
           <div className="flex gap-1.5 w-full">
             {dailyMode.pyramidLengths.map((len) => {
               const word = pyramidFound[len];

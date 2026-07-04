@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats, fetchPlayerProfile } from "../lib/api";
 import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats, LeaderboardPeriod, PlayerProfile } from "../lib/api";
-import { modeForDate, isMarathonMode, isPyramidMode } from "../lib/dailyModes";
+import { modeForDate, isTriddleMode, isPyramidMode } from "../lib/dailyModes";
+import { getModeOverride } from "../lib/url";
 import { getTrie } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
 import ProgressStrip from "./leaderboard/ProgressStrip";
@@ -96,7 +97,7 @@ export default function LeaderboardDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, period]);
 
-  const mode = modeForDate(date);
+  const mode = modeForDate(date, getModeOverride());
 
   // Mots possibles du défi du jour — génération déterministe à partir de date + mode.
   // useMemo car la génération coûte 50-200ms (DFS sur la grille avec le trie complet).
@@ -109,7 +110,7 @@ export default function LeaderboardDrawer({
         const { validWords } = mode.generate(date, trie)
         return [...validWords].sort((a, b) => b.length - a.length || a.localeCompare(b))
       }
-      if (isMarathonMode(mode)) {
+      if (isTriddleMode(mode)) {
         const { validWordsPerGrid } = mode.generate(date, trie)
         const merged = new Set<string>()
         for (const s of validWordsPerGrid) for (const w of s) merged.add(w)
@@ -303,7 +304,7 @@ export default function LeaderboardDrawer({
                       {entry.rank <= 3 && <span style={{ fontSize: "0.6rem", color: "#475569" }}>+{4 - entry.rank}</span>}
                     </div>
                     <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
-                    <ProgressStrip mode={mode} pyramidFound={entry.pyramid_found} />
+                    <ProgressStrip mode={mode} pyramidFound={entry.pyramid_found} wordCount={entry.levels_found} />
                   </div>
                   <span style={{ fontSize: "1.1rem", color: "#475569", fontWeight: 400, flexShrink: 0, marginLeft: "-0.15rem" }}>›</span>
                 </div>

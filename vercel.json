@@ -1,3 +1,4 @@
 {
+  "alias": ["ruzzle-custom.vercel.app"],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

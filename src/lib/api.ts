@@ -285,17 +285,19 @@ export async function fetchMyAggregateStats(period: StatsPeriod = 'month'): Prom
 
 export interface ModeRecord {
   display_name: string | null
+  score: number
   elapsed_secs: number
   date: string
 }
 
-// Renvoie le record (temps le plus rapide, défi complété) pour un mode donné, all-time.
+// Renvoie le record (meilleur score, défi complété) pour un mode donné, all-time.
 export async function fetchModeRecord(modeId: string): Promise<ModeRecord | null> {
   const { data, error } = await supabase
     .from('daily_results')
-    .select('elapsed_secs, date, profiles(display_name)')
+    .select('score, elapsed_secs, date, profiles(display_name)')
     .eq('mode', modeId)
     .eq('completed', true)
+    .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(1)
@@ -304,20 +306,21 @@ export async function fetchModeRecord(modeId: string): Promise<ModeRecord | null
   if (!data) return null
   return {
     display_name: (data.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
+    score: data.score,
     elapsed_secs: data.elapsed_secs,
     date: data.date,
   }
 }
 
-// Renvoie le record du défi du JOUR (date + mode précis). Si personne n'a complété
-// encore aujourd'hui, renvoie null.
+// Renvoie le record du défi du JOUR (date + mode précis) : meilleur score,
+// tiebreaker temps ASC puis created_at ASC. Si personne n'a joué encore, renvoie null.
 export async function fetchDailyRecord(date: string, modeId: string): Promise<ModeRecord | null> {
   const { data, error } = await supabase
     .from('daily_results')
-    .select('elapsed_secs, date, profiles(display_name)')
+    .select('score, elapsed_secs, date, profiles(display_name)')
     .eq('date', date)
     .eq('mode', modeId)
-    .eq('completed', true)
+    .order('score', { ascending: false })
     .order('elapsed_secs', { ascending: true })
     .order('created_at', { ascending: true })
     .limit(1)
@@ -326,6 +329,7 @@ export async function fetchDailyRecord(date: string, modeId: string): Promise<Mo
   if (!data) return null
   return {
     display_name: (data.profiles as unknown as { display_name: string | null } | null)?.display_name ?? null,
+    score: data.score,
     elapsed_secs: data.elapsed_secs,
     date: data.date,
   }

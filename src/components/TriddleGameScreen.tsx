@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, SkipForward } from "lucide-react";
 import Grid from "./Grid";
+import CountdownScreen from "./CountdownScreen";
 import { isValidWord } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
 import {
@@ -8,6 +9,7 @@ import {
   isPyramidComplete,
   type TriddleMode,
 } from "../lib/dailyModes";
+import { useCountdown } from "../hooks/useCountdown";
 import { useScoreAnimation } from "../hooks/useScoreAnimation";
 import { playValid, playInvalid, playDuplicate } from "../lib/audio";
 import { getDailyAbandonMessage } from "../lib/abandonMessages";
@@ -50,13 +52,22 @@ export default function TriddleGameScreen({ mode, grids, onComplete, onAbandon, 
   const [timeRemaining, setTimeRemaining] = useState(mode.perGridDurationSecs);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionInfo, setTransitionInfo] = useState<{ next: number; gridScore: number } | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   const { anim: scoreAnim, trigger: triggerScoreAnim } = useScoreAnimation();
 
-  const gridStartedAtRef = useRef<number>(Date.now());
-  const sessionStartedAtRef = useRef<number>(Date.now());
+  const gridStartedAtRef = useRef<number>(0);
+  const sessionStartedAtRef = useRef<number>(0);
   const tickerRef = useRef<number>(0);
   const advancingRef = useRef(false); // protège contre double appel pendant transition
+
+  // Countdown 3-2-1-Go avant la 1ère grille uniquement.
+  const countdown = useCountdown(true, () => {
+    const now = Date.now();
+    gridStartedAtRef.current = now;
+    sessionStartedAtRef.current = now;
+    setIsRunning(true);
+  });
 
   const currentScore = pyramidScore(currentPyramidFound);
   const totalScore = currentScore + pastResults.reduce((acc, r) => acc + pyramidScore(r.pyramidFound), 0);
@@ -106,15 +117,15 @@ export default function TriddleGameScreen({ mode, grids, onComplete, onAbandon, 
 
   // Auto-complétion : si la pyramide de la grille courante est pleine
   useEffect(() => {
-    if (isTransitioning) return;
+    if (!isRunning || isTransitioning) return;
     if (isPyramidComplete(mode, currentPyramidFound)) {
       advanceGrid();
     }
-  }, [currentPyramidFound, mode, isTransitioning, advanceGrid]);
+  }, [currentPyramidFound, mode, isRunning, isTransitioning, advanceGrid]);
 
   // Timer par grille
   useEffect(() => {
-    if (isTransitioning) return;
+    if (!isRunning || isTransitioning) return;
     const tick = () => {
       const elapsed = Math.floor((Date.now() - gridStartedAtRef.current) / 1000);
       const remaining = mode.perGridDurationSecs - elapsed;
@@ -126,7 +137,7 @@ export default function TriddleGameScreen({ mode, grids, onComplete, onAbandon, 
     tick();
     tickerRef.current = window.setInterval(tick, 250);
     return () => clearInterval(tickerRef.current);
-  }, [currentGridIndex, isTransitioning, mode.perGridDurationSecs, advanceGrid]);
+  }, [currentGridIndex, isRunning, isTransitioning, mode.perGridDurationSecs, advanceGrid]);
 
   const handleWordSubmit = useCallback(
     (cells: Cell[]): FeedbackType => {
@@ -162,6 +173,8 @@ export default function TriddleGameScreen({ mode, grids, onComplete, onAbandon, 
 
   const grid = grids[currentGridIndex];
   const maxLen = mode.pyramidLengths[mode.pyramidLengths.length - 1];
+
+  if (countdown !== null) return <CountdownScreen value={countdown} />;
 
   return (
     <div className="h-dvh bg-slate-900 flex flex-col max-w-md mx-auto overflow-hidden">

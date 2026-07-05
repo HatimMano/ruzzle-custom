@@ -98,29 +98,35 @@ export default function LeaderboardDrawer({
   }, [tab, period]);
 
   const mode = modeForDate(date, getModeOverride());
+  const [activeGridTab, setActiveGridTab] = useState(0);
 
   // Mots possibles du défi du jour — génération déterministe à partir de date + mode.
   // useMemo car la génération coûte 50-200ms (DFS sur la grille avec le trie complet).
-  const allWords = useMemo(() => {
+  // Pour Triddle, on retourne un tableau par grille (sub-tabs G1/G2/G3).
+  const wordsPerGrid = useMemo<string[][]>(() => {
     if (tab !== 'mots') return []
     const trie = getTrie()
     if (!trie) return []
     try {
       if (isPyramidMode(mode)) {
         const { validWords } = mode.generate(date, trie)
-        return [...validWords].sort((a, b) => b.length - a.length || a.localeCompare(b))
+        return [[...validWords].sort((a, b) => b.length - a.length || a.localeCompare(b))]
       }
       if (isTriddleMode(mode)) {
         const { validWordsPerGrid } = mode.generate(date, trie)
-        const merged = new Set<string>()
-        for (const s of validWordsPerGrid) for (const w of s) merged.add(w)
-        return [...merged].sort((a, b) => b.length - a.length || a.localeCompare(b))
+        return validWordsPerGrid.map((s) =>
+          [...s].sort((a, b) => b.length - a.length || a.localeCompare(b))
+        )
       }
     } catch (e) {
       console.error('Mots tab:', e)
     }
     return []
   }, [tab, date, mode])
+
+  const isTriddle = isTriddleMode(mode)
+  const allWords = wordsPerGrid[isTriddle ? activeGridTab : 0] ?? []
+  const totalWords = wordsPerGrid.reduce((acc, g) => acc + g.length, 0)
 
   return (
     <div
@@ -454,13 +460,38 @@ export default function LeaderboardDrawer({
 
           {/* ─── Onglet MOTS — liste des mots possibles du jour ───────── */}
           {tab === 'mots' && (<>
+            {isTriddle && wordsPerGrid.length > 0 && (
+              <div style={{ display: "flex", gap: "0.3rem", padding: "0.25rem", background: "rgba(30,41,59,0.6)", borderRadius: "0.75rem", marginBottom: "0.5rem" }}>
+                {wordsPerGrid.map((_, gi) => (
+                  <button
+                    key={gi}
+                    onClick={() => setActiveGridTab(gi)}
+                    style={{
+                      flex: 1,
+                      padding: "0.4rem 0",
+                      borderRadius: "0.5rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      border: "none",
+                      background: activeGridTab === gi ? "rgba(255,255,255,0.08)" : "transparent",
+                      color: activeGridTab === gi ? "white" : "#64748b",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Grille {gi + 1}
+                  </button>
+                ))}
+              </div>
+            )}
             {allWords.length === 0 && (
               <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>
             )}
             {allWords.length > 0 && (
               <>
                 <p style={{ fontSize: "0.65rem", color: "#64748b", textAlign: "center", padding: "0.3rem 0 0.5rem", fontStyle: "italic" }}>
-                  {allWords.length} mots trouvables sur la grille du jour
+                  {isTriddle
+                    ? `${allWords.length} mots sur la grille ${activeGridTab + 1} · ${totalWords} au total`
+                    : `${allWords.length} mots trouvables sur la grille du jour`}
                 </p>
                 {allWords.map((w, i) => {
                   const s = scoreForLen(w.length);

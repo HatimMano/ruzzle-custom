@@ -311,8 +311,6 @@ export const fateBirthdayMode: PyramidMode = {
 // DONKEY est un mot bonus hors dico — injecté dans wordSet/trie par index.ts pour ce mode.
 const TAHA_BIRTHDAY_DATE = '2026-07-10'
 
-export const TAHA_BONUS_WORDS = ['donkey']
-
 const TAHA_GRID_LETTERS: string[][] = [
   ['l', 'd', 'y', 'k'],
   ['c', 'o', 'n', 'e'],
@@ -340,6 +338,45 @@ export const tahaBirthdayMode: PyramidMode = {
   generate(seed, trie) {
     return generateTahaBirthdayGrid(seed, trie)
   },
+}
+
+// Anniversaire Hatim 11/07/2026 : grille 4×4 fixe avec TRENTAINE + DREAMTIM (bonus).
+const HATIM_BIRTHDAY_DATE = '2026-07-11'
+
+const HATIM_GRID_LETTERS: string[][] = [
+  ['t', 'r', 'e', 'd'],
+  ['d', 'i', 'a', 'n'],
+  ['l', 'm', 't', 'i'],
+  ['e', 'e', 'n', 'm'],
+]
+
+function generateHatimBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const grid: Grid = HATIM_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const hatimBirthdayMode: PyramidMode = {
+  kind: 'pyramid',
+  id: 'birthday-hatim-2026-07-11',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  generate(seed, trie) {
+    return generateHatimBirthdayGrid(seed, trie)
+  },
+}
+
+// Mots bonus hors dico par mode — index.ts les injecte dans wordSet/trie
+// avant validation pour que ces mots comptent (pyramide + foundWords).
+export const MODE_BONUS_WORDS: Record<string, string[]> = {
+  'birthday-taha-2026-07-10': ['donkey'],
+  'birthday-hatim-2026-07-11': ['dreamtim'],
 }
 
 export const marathonMode: MarathonMode = {
@@ -381,6 +418,7 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
+  [HATIM_BIRTHDAY_DATE]: hatimBirthdayMode,
   '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
 }
 

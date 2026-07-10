@@ -161,8 +161,11 @@ export default function DailyResultsScreen({
     { id: "tous", label: `Tous les mots` },
   ];
 
-  const isBirthday = mode.id === "birthday-2026-04-30";
-  const [birthdayOpen, setBirthdayOpen] = useState(isBirthday);
+  const birthdayLabel =
+    mode.id === "birthday-2026-04-30" ? "Happy 60"
+    : mode.id === "birthday-hatim-2026-07-11" ? "Happy 30"
+    : null;
+  const [birthdayOpen, setBirthdayOpen] = useState(birthdayLabel !== null);
 
   return (
     <div
@@ -593,14 +596,14 @@ export default function DailyResultsScreen({
           Accueil
         </button>
       </div>
-      {isBirthday && birthdayOpen && (
-        <BirthdayOverlay onClose={() => setBirthdayOpen(false)} />
+      {birthdayLabel && birthdayOpen && (
+        <BirthdayOverlay label={birthdayLabel} onClose={() => setBirthdayOpen(false)} />
       )}
     </div>
   );
 }
 
-function BirthdayOverlay({ onClose }: { onClose: () => void }) {
+function BirthdayOverlay({ label, onClose }: { label: string; onClose: () => void }) {
   const colors = ["#fbbf24", "#f472b6", "#60a5fa", "#34d399", "#a78bfa", "#f87171"];
   const confetti = Array.from({ length: 80 }, (_, i) => ({
     left: Math.random() * 100,
@@ -674,7 +677,7 @@ function BirthdayOverlay({ onClose }: { onClose: () => void }) {
           animation: "sixty-pop 0.9s cubic-bezier(0.34,1.56,0.64,1) both, sixty-glow 2.5s ease-in-out 0.9s infinite",
         }}
       >
-        Happy 60
+        {label}
       </div>
       <button
         onClick={onClose}

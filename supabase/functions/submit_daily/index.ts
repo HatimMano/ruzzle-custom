@@ -14,8 +14,7 @@ import {
   isRuddleMode,
   isSpeedleMode,
   pyramidSlotForWord,
-  tahaBirthdayMode,
-  TAHA_BONUS_WORDS,
+  MODE_BONUS_WORDS,
   type DailyMode,
 } from './_shared/dailyModes.ts'
 import { findWordPath, type Grid } from './_shared/gridGenerator.ts'
@@ -174,15 +173,13 @@ Deno.serve(async (req) => {
   // Charge le dico
   const { wordSet, trie } = await loadDictionary()
 
-  // Mots bonus hors dico du mode anniversaire Taha (ex : "donkey").
+  // Mots bonus hors dico des modes anniversaire (ex : "donkey", "dreamtim").
   // NB : wordSet/trie sont cachés module-level → l'ajout persiste entre invocations,
   // sans impact réel (le mot doit rester traçable sur la grille du jour pour compter).
-  if (mode.id === tahaBirthdayMode.id) {
-    for (const w of TAHA_BONUS_WORDS) {
-      if (!wordSet.has(w)) {
-        wordSet.add(w)
-        trie.insert(w)
-      }
+  for (const w of MODE_BONUS_WORDS[mode.id] ?? []) {
+    if (!wordSet.has(w)) {
+      wordSet.add(w)
+      trie.insert(w)
     }
   }
 

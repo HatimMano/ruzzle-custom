@@ -552,6 +552,71 @@ export const tahaBirthdayMode: DailyModeRules = {
   },
 }
 
+// ─── Mode anniversaire Hatim (4×4 grille fixe avec TRENTAINE + DREAMTIM) ──────
+
+const HATIM_BIRTHDAY_DATE = '2026-07-11'
+
+// Grille déterministe (scripts/optimize-birthday-taha.mjs, mots trentaine,dreamtim)
+// garantissant TRENTAINE (9L, dico) + DREAMTIM (8L, mot bonus) + 423 mots dont
+// 5 de 8L (elierait, maintien, mentirai, minerait, rentamee) et 1 seul 9L.
+//   T R E D
+//   D I A N
+//   L M T I
+//   E E N M
+const HATIM_GRID_LETTERS: string[][] = [
+  ['t', 'r', 'e', 'd'],
+  ['d', 'i', 'a', 'n'],
+  ['l', 'm', 't', 'i'],
+  ['e', 'e', 'n', 'm'],
+]
+
+export const HATIM_BONUS_WORDS = ['dreamtim']
+
+function generateHatimBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  addBonusWords(HATIM_BONUS_WORDS)
+  const grid: Grid = HATIM_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const hatimBirthdayMode: DailyModeRules = {
+  kind: 'pyramid',
+  id: 'birthday-hatim-2026-07-11',
+  name: 'Happy 30 Mano',
+  subtitle: 'Le début d\'autre chose 🎂',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(251,191,36,0.32) 0%, rgba(244,114,182,0.2) 50%, rgba(139,92,246,0.2) 100%)',
+    cardBorder: '1px solid rgba(251,191,36,0.5)',
+    cardShadow: '0 0 32px rgba(251,191,36,0.22)',
+    accent: '#fcd34d',
+    accentSoft: 'rgba(252,211,77,0.75)',
+    slotBg: 'rgba(251,191,36,0.14)',
+    slotBorder: '1px solid rgba(251,191,36,0.3)',
+    buttonBg: 'rgba(217,119,6,0.55)',
+    buttonBorder: '1px solid rgba(217,119,6,0.35)',
+  },
+  intro: {
+    title: 'Happy 30 Mano',
+    tagline: 'Le début d\'autre chose',
+    bullets: [
+      'À 20 ans on court. À 30 on choisit où aller.',
+      'Merci de jouer chaque jour.',
+    ],
+    cta: 'Joyeux anniversaire 🎉',
+  },
+  generate(seed, trie) {
+    return generateHatimBirthdayGrid(seed, trie)
+  },
+}
+
 // ─── Triddle : 3 grilles d'affilée ────────────────────────────────────────────
 
 export const triddleMode: TriddleMode = {
@@ -687,6 +752,7 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
+  [HATIM_BIRTHDAY_DATE]: hatimBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
   '2026-05-17': triddleMode,
 }

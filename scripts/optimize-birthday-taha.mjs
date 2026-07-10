@@ -16,12 +16,17 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DICT_PATH = path.join(__dirname, '..', 'public', 'words_fr.txt')
 const FILLS = parseInt(process.argv[2] ?? '150', 10)
-const WORD7 = (process.argv[3] ?? 'docteur').toLowerCase()
+// argv[3] : mots à placer, séparés par des virgules (défaut = grille Taha)
+const WORDS = (process.argv[3] ?? 'gourmand,docteur,donkey')
+  .toLowerCase()
+  .split(',')
+  .map((w) => w.trim())
+  .filter(Boolean)
+  .sort((a, b) => b.length - a.length) // ordre décroissant = pruning maximal
 
 const SIZE = 4
 const MAX_LEN = 10
 const TOP_K = 5
-const WORDS = ['gourmand', WORD7, 'donkey'] // ordre décroissant = pruning maximal
 
 // ─── Helpers grille ───────────────────────────────────────────────────────────
 
@@ -59,24 +64,30 @@ function* placements(word, cells) {
   yield* dfs(0, -1, new Set(), new Map())
 }
 
+// Cap mémoire : on stocke les grilles en strings (16 chars) et on arrête
+// la collecte à MAX_SOLUTIONS (l'espace explose avec peu de mots à placer).
+const MAX_SOLUTIONS = 200000
+
 function collectSolutions() {
-  const base = Array(SIZE * SIZE).fill(null)
-  const solutions = []
   const seen = new Set()
-  for (const a1 of placements(WORDS[0], base)) {
-    const g1 = base.map((v, i) => a1.get(i) ?? v)
-    for (const a2 of placements(WORDS[1], g1)) {
-      const g2 = g1.map((v, i) => a2.get(i) ?? v)
-      for (const a3 of placements(WORDS[2], g2)) {
-        const g3 = g2.map((v, i) => a3.get(i) ?? v)
-        const key = g3.map(x => x ?? '.').join('')
-        if (seen.has(key)) continue
+  let full = false
+  function rec(wordIdx, cells) {
+    if (full) return
+    if (wordIdx === WORDS.length) {
+      const key = cells.map(x => x ?? '.').join('')
+      if (!seen.has(key)) {
         seen.add(key)
-        solutions.push(g3)
+        if (seen.size >= MAX_SOLUTIONS) full = true
       }
+      return
+    }
+    for (const a of placements(WORDS[wordIdx], cells)) {
+      if (full) return
+      rec(wordIdx + 1, cells.map((v, i) => a.get(i) ?? v))
     }
   }
-  return solutions
+  rec(0, Array(SIZE * SIZE).fill(null))
+  return [...seen].map(key => key.split('').map(c => (c === '.' ? null : c)))
 }
 
 // ─── Phase 2 : remplissage + scoring ─────────────────────────────────────────

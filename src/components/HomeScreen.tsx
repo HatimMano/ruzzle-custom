@@ -369,13 +369,11 @@ export default function HomeScreen({
                     }} />
                   ) : modeRecord ? (
                     <>
-                      <span style={{ color: "white", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
-                        {modeRecord.score} pts
-                      </span>
-                      <span>par</span>
-                      <span style={{ color: "white", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>
+                      <span>·</span>
+                      <span style={{ color: "white", maxWidth: "12rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>
                         {modeRecord.display_name ?? 'Anonyme'}
                       </span>
+                      <span>en tête</span>
                     </>
                   ) : (
                     <span style={{ opacity: 0.6 }}>— sois le premier !</span>

@@ -230,7 +230,9 @@ export default function LeaderboardDrawer({
           <>
         {/* (Indentation préservée pour minimiser le diff) */}
         <div style={{ display: "flex", background: "rgba(30,41,59,0.9)", borderRadius: "999px", padding: "0.25rem", gap: "0.25rem" }}>
-          {([['jour', '🏆 Jour'], ['classement', '⭐ Classement'], ['mots', '🔤 Mots']] as const).map(([id, label]) => {
+          {([['jour', '🏆 Jour'], ['classement', '⭐ Classement'], ['mots', '🔤 Mots']] as const)
+            .filter(([id]) => !(id === 'mots' && mode.id === 'birthday-taha-2026-07-10'))
+            .map(([id, label]) => {
             const showBadge = id === 'classement' && !classementSeen;
             return (
               <button

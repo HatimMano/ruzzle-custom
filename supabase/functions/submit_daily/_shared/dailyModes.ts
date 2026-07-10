@@ -307,6 +307,41 @@ export const fateBirthdayMode: PyramidMode = {
   },
 }
 
+// Anniversaire Taha 10/07/2026 : grille 4×4 fixe avec DOCTEUR + GOURMAND + DONKEY.
+// DONKEY est un mot bonus hors dico — injecté dans wordSet/trie par index.ts pour ce mode.
+const TAHA_BIRTHDAY_DATE = '2026-07-10'
+
+export const TAHA_BONUS_WORDS = ['donkey']
+
+const TAHA_GRID_LETTERS: string[][] = [
+  ['l', 'd', 'y', 'k'],
+  ['c', 'o', 'n', 'e'],
+  ['t', 'u', 'g', 'a'],
+  ['a', 'e', 'r', 'm'],
+]
+
+function generateTahaBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const grid: Grid = TAHA_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const tahaBirthdayMode: PyramidMode = {
+  kind: 'pyramid',
+  id: 'birthday-taha-2026-07-10',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  generate(seed, trie) {
+    return generateTahaBirthdayGrid(seed, trie)
+  },
+}
+
 export const marathonMode: MarathonMode = {
   kind: 'marathon',
   id: 'marathon',
@@ -345,6 +380,7 @@ export const speedleMode: SpeedleMode = { kind: 'speedle', id: 'speedle' }
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
+  [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
   '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
 }
 

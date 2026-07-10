@@ -128,7 +128,8 @@ export default function HomeScreen({
   const { cardBg, cardBorder, cardShadow, accent, accentSoft, slotBg, slotBorder, buttonBg, buttonBorder } = todayMode.palette;
   const isBirthday = todayMode.id === "birthday-2026-04-30";
   const isFateBirthday = todayMode.id === "birthday-fate-2026-06-30";
-  const birthdayNumber = isBirthday ? "60" : isFateBirthday ? "59" : null;
+  const isTahaBirthday = todayMode.id === "birthday-taha-2026-07-10";
+  const birthdayNumber = isBirthday ? "60" : isFateBirthday ? "59" : isTahaBirthday ? "31" : null;
   const floatingNumbers = birthdayNumber
     ? Array.from({ length: 14 }, (_, i) => ({
         top: (i * 37 + 13) % 90,

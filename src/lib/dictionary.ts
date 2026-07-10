@@ -53,6 +53,18 @@ export async function loadDictionary(): Promise<Set<string>> {
   return loadPromise
 }
 
+// Mots bonus hors dictionnaire (ex : "donkey" pour le mode anniversaire Taha).
+// Insérés dans le wordSet ET le trie pour être trouvables + validés à la saisie.
+export function addBonusWords(words: string[]): void {
+  if (!wordSet || !trie) return
+  for (const w of words) {
+    const lower = w.toLowerCase()
+    if (wordSet.has(lower)) continue
+    wordSet.add(lower)
+    trie.insert(lower)
+  }
+}
+
 export function isValidWord(word: string): boolean {
   if (!wordSet) return false
   return wordSet.has(word.toLowerCase())

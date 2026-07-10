@@ -14,6 +14,8 @@ import {
   isRuddleMode,
   isSpeedleMode,
   pyramidSlotForWord,
+  tahaBirthdayMode,
+  TAHA_BONUS_WORDS,
   type DailyMode,
 } from './_shared/dailyModes.ts'
 import { findWordPath, type Grid } from './_shared/gridGenerator.ts'
@@ -171,6 +173,18 @@ Deno.serve(async (req) => {
 
   // Charge le dico
   const { wordSet, trie } = await loadDictionary()
+
+  // Mots bonus hors dico du mode anniversaire Taha (ex : "donkey").
+  // NB : wordSet/trie sont cachés module-level → l'ajout persiste entre invocations,
+  // sans impact réel (le mot doit rester traçable sur la grille du jour pour compter).
+  if (mode.id === tahaBirthdayMode.id) {
+    for (const w of TAHA_BONUS_WORDS) {
+      if (!wordSet.has(w)) {
+        wordSet.add(w)
+        trie.insert(w)
+      }
+    }
+  }
 
   // ─── Validation pyramide pyramide vs marathon ───────────────────────────────
   let canonicalScore = 0

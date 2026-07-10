@@ -1,5 +1,5 @@
 import { mulberry32, seedFromString } from './prng'
-import { Trie } from './dictionary'
+import { Trie, addBonusWords } from './dictionary'
 import {
   generateRandomGrid,
   generateGrid,
@@ -496,6 +496,62 @@ export const fateBirthdayMode: DailyModeRules = {
   },
 }
 
+// ─── Mode anniversaire Taha (4×4 grille fixe avec DOCTEUR + GOURMAND + DONKEY) ─
+
+const TAHA_BIRTHDAY_DATE = '2026-07-10'
+
+// Grille déterministe (issue de scripts/optimize-birthday-taha.mjs) qui garantit
+// DOCTEUR, GOURMAND, DONKEY (mot bonus injecté au dico) + 297 mots dont 5 de 8L
+// (gourmand, autogera, cloutera, engouera, manegeat) — cap 8+ volontairement dur.
+//   L D Y K
+//   C O N E
+//   T U G A
+//   A E R M
+const TAHA_GRID_LETTERS: string[][] = [
+  ['l', 'd', 'y', 'k'],
+  ['c', 'o', 'n', 'e'],
+  ['t', 'u', 'g', 'a'],
+  ['a', 'e', 'r', 'm'],
+]
+
+export const TAHA_BONUS_WORDS = ['donkey']
+
+function generateTahaBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  addBonusWords(TAHA_BONUS_WORDS)
+  const grid: Grid = TAHA_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const tahaBirthdayMode: DailyModeRules = {
+  kind: 'pyramid',
+  id: 'birthday-taha-2026-07-10',
+  name: 'Happy 31 Taha M',
+  subtitle: 'Joyeux anniversaire 🎂',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(56,189,248,0.32) 0%, rgba(99,102,241,0.22) 50%, rgba(168,85,247,0.18) 100%)',
+    cardBorder: '1px solid rgba(56,189,248,0.5)',
+    cardShadow: '0 0 32px rgba(56,189,248,0.22)',
+    accent: '#38bdf8',
+    accentSoft: 'rgba(56,189,248,0.7)',
+    slotBg: 'rgba(56,189,248,0.14)',
+    slotBorder: '1px solid rgba(56,189,248,0.3)',
+    buttonBg: 'rgba(56,189,248,0.55)',
+    buttonBorder: '1px solid rgba(56,189,248,0.35)',
+  },
+  generate(seed, trie) {
+    return generateTahaBirthdayGrid(seed, trie)
+  },
+}
+
 // ─── Triddle : 3 grilles d'affilée ────────────────────────────────────────────
 
 export const triddleMode: TriddleMode = {
@@ -630,6 +686,7 @@ export const speedleMode: SpeedleMode = {
 const SPECIAL_DATES: Record<string, DailyMode> = {
   [BIRTHDAY_DATE]: birthdayMode,
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
+  [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
   '2026-05-17': triddleMode,
 }

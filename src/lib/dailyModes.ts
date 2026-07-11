@@ -736,7 +736,7 @@ export const speedleMode: SpeedleMode = {
     bullets: [
       '45 secondes au départ',
       'Chaque mot rallonge le sablier',
-      'Les mots longs rallongent bien plus (3L=+1s, 8L+=+15s)',
+      'Les mots longs rallongent bien plus (3L=+1s, 8L+=+8s)',
       'Le jeu finit quand le sablier tombe',
     ],
     cta: 'Go !',

@@ -9,6 +9,9 @@ import {
   isSpeedleMode,
   type DailyMode,
 } from "../lib/dailyModes";
+import { speedleSecsBonus } from "../lib/speedleScoring";
+
+const SPEEDLE_LENGTHS = [3, 4, 5, 6, 7, 8] as const;
 import HistoryDrawer from "./HistoryDrawer";
 import LeaderboardDrawer from "./LeaderboardDrawer";
 import ConfettiCanvas from "./ConfettiCanvas";
@@ -396,17 +399,20 @@ export default function HomeScreen({
                       </div>
                     </div>
                   ) : isSpeedleMode(todayMode) ? (
-                    <div style={{ display: "flex", gap: "0.4rem" }}>
-                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
-                        ⌛ {todayMode.startSecs}s
+                    <>
+                      {pyramidRows({ pyramidLengths: SPEEDLE_LENGTHS }).map((row, ri) => (
+                        <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>
+                          {row.map((len) => (
+                            <div key={len} style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
+                              {len === 8 ? "8L+" : `${len}L`} <span style={{ opacity: 0.75 }}>+{speedleSecsBonus(len)}s</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <div style={{ fontSize: "0.7rem", fontWeight: 600, color: accentSoft, opacity: 0.85, marginTop: "0.15rem" }}>
+                        ⌛ {todayMode.startSecs}s au départ — chaque mot rallonge le sablier
                       </div>
-                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
-                        +s / mot
-                      </div>
-                      <div style={{ padding: "0.3rem 0.7rem", borderRadius: "0.5rem", background: slotBg, border: slotBorder, fontSize: "0.75rem", fontWeight: 700, color: accent }}>
-                        {todayMode.minWordLen}L+
-                      </div>
-                    </div>
+                    </>
                   ) : (
                     pyramidRows(todayMode).map((row, ri) => (
                       <div key={ri} style={{ display: "flex", gap: "0.4rem" }}>

@@ -711,6 +711,38 @@ export const ruddleMode: RuddleMode = {
 
 // ─── Speedle : sablier — commence à 45s, chaque mot ajoute du temps ───────────
 
+// Grille Speedle : mêmes exigences de richesse que generateGrid, plus une
+// contrainte 2-5 mots de 8L+ (le +10s doit exister mais rester rare).
+function generateSpeedleGrid(
+  seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const numericSeed = seedFromString(seed)
+  const rand = mulberry32(numericSeed)
+
+  let bestGrid: Grid | null = null
+  let bestWords: Set<string> = new Set()
+  let bestScore = -1
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS_DAILY; attempt++) {
+    const grid = generateRandomGrid(rand, 4)
+    const words = findAllWords(grid, trie, 3, 10)
+    const capCount = [...words].filter((w) => w.length >= 8).length
+    if (words.size >= 100 && capCount >= 2 && capCount <= 5) {
+      return { grid, validWords: words }
+    }
+    // Fallback : privilégier la proximité de la cible cap, puis la richesse
+    const score = words.size - Math.abs(capCount - 3) * 100
+    if (score > bestScore) {
+      bestScore = score
+      bestGrid = grid
+      bestWords = words
+    }
+  }
+
+  return { grid: bestGrid ?? generateRandomGrid(rand, 4), validWords: bestWords }
+}
+
 export const speedleMode: SpeedleMode = {
   kind: 'speedle',
   id: 'speedle',
@@ -736,13 +768,13 @@ export const speedleMode: SpeedleMode = {
     bullets: [
       '45 secondes au départ',
       'Chaque mot rallonge le sablier',
-      'Les mots longs rallongent bien plus (3L=+1s, 8L+=+8s)',
+      'Les mots longs rallongent bien plus (3L=+1s, 8L+=+10s)',
       'Le jeu finit quand le sablier tombe',
     ],
     cta: 'Go !',
   },
   generate(seed, trie) {
-    return generateGrid(effectiveSeed(seed), trie, 3)
+    return generateSpeedleGrid(effectiveSeed(seed), trie)
   },
 }
 

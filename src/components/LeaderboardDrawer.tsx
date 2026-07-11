@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAggregateLeaderboard, fetchMyAggregateStats, fetchMyStats, fetchPlayerProfile } from "../lib/api";
 import type { LeaderboardEntry, AggregateLeaderboardEntry, MyAggregateStats, PlayerStats, LeaderboardPeriod, PlayerProfile } from "../lib/api";
-import { modeForDate, isTriddleMode, isPyramidMode } from "../lib/dailyModes";
+import { modeForDate, isTriddleMode, isPyramidMode, isRuddleMode, isSpeedleMode } from "../lib/dailyModes";
 import { getModeOverride } from "../lib/url";
 import { getTrie } from "../lib/dictionary";
 import { scoreForLen } from "../lib/scoring";
@@ -108,7 +108,7 @@ export default function LeaderboardDrawer({
     const trie = getTrie()
     if (!trie) return []
     try {
-      if (isPyramidMode(mode)) {
+      if (isPyramidMode(mode) || isRuddleMode(mode) || isSpeedleMode(mode)) {
         const { validWords } = mode.generate(date, trie)
         return [[...validWords].sort((a, b) => b.length - a.length || a.localeCompare(b))]
       }

@@ -14,6 +14,7 @@ import {
   isRuddleMode,
   isSpeedleMode,
   pyramidSlotForWord,
+  speedleSecsBonus,
   MODE_BONUS_WORDS,
   type DailyMode,
 } from './_shared/dailyModes.ts'
@@ -163,10 +164,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Ruddle/Speedle : anti-cheat non implémenté côté serveur (score non pyramidal, pas de canonique).
-  // Ces modes sont censés être soumis via insert direct client (DIRECT_INSERT_MODES). Si on reçoit
-  // un claim ruddle/speedle ici, c'est probablement un bug côté client (ou une tentative). On refuse.
-  if (isRuddleMode(mode) || isSpeedleMode(mode)) {
+  // Ruddle : jamais en rotation daily, insert direct historique. Refus explicite.
+  if (isRuddleMode(mode)) {
     return jsonResponse({ error: 'submit_via_direct_insert', mode: mode.id }, 400)
   }
 
@@ -189,6 +188,7 @@ Deno.serve(async (req) => {
   let canonicalLevelsFound = 0
   let canonicalPyramid: unknown
   let canonicalFoundWords: string[] = []
+  let canonicalElapsed = Math.floor(payload.elapsedSecs)
 
   if (isPyramidMode(mode)) {
     const { grid } = mode.generate(payload.date, trie)
@@ -224,6 +224,24 @@ Deno.serve(async (req) => {
     canonicalPyramid = canonicalPerGrid.reduce((acc, p, i) => { acc[String(i)] = p; return acc }, {} as Record<string, Record<number, string>>)
     // Dedup found words across grids (for the column, c'est juste un trace)
     canonicalFoundWords = [...new Set(totalFoundWords)]
+  } else if (isSpeedleMode(mode)) {
+    // Speedle : mots revalidés (dico + traçables), temps de survie borné par le
+    // temps physiquement atteignable (départ + bonus des mots validés), score
+    // composite recalculé — même formule que le client (speedleCompositeScore).
+    const { grid } = mode.generate(payload.date, trie)
+    canonicalFoundWords = [...new Set(
+      (payload.foundWords || [])
+        .filter((w) => typeof w === 'string')
+        .map((w) => w.toLowerCase())
+    )].filter((w) => wordSet.has(w) && findWordPath(grid, w))
+    const maxSurvivable = mode.startSecs + canonicalFoundWords.reduce(
+      (acc, w) => acc + speedleSecsBonus(w.length), 0)
+    canonicalElapsed = Math.min(Math.floor(payload.elapsedSecs), maxSurvivable)
+    const maxLen = canonicalFoundWords.reduce((m, w) => Math.max(m, w.length), 0)
+    canonicalScore = canonicalElapsed * 1_000_000 + canonicalFoundWords.length * 100 + maxLen
+    canonicalCompleted = true // le sablier finit toujours par tomber
+    canonicalLevelsFound = canonicalFoundWords.length
+    canonicalPyramid = {}
   } else {
     return jsonResponse({ error: 'unknown_mode_kind' }, 500)
   }
@@ -234,7 +252,7 @@ Deno.serve(async (req) => {
     user_id: userId,
     date: payload.date,
     mode: mode.id,
-    elapsed_secs: Math.floor(payload.elapsedSecs),
+    elapsed_secs: canonicalElapsed,
     completed: canonicalCompleted,
     levels_found: canonicalLevelsFound,
     score: canonicalScore,

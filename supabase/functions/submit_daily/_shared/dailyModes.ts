@@ -32,16 +32,19 @@ export interface MarathonMode {
   generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
 }
 
-// Ruddle/Speedle : modes côté serveur uniquement pour cohérence dispatch.
-// Ils passent par insert direct client (bypass anti-cheat), donc pas de generate ici.
-// Si l'edge function reçoit un claim ruddle/speedle, elle renvoie une erreur explicite.
+// Ruddle : mode côté serveur uniquement pour cohérence dispatch (insert direct
+// client historique — cassé par RLS, mode jamais en rotation daily).
 export interface RuddleMode {
   readonly kind: 'ruddle'
   readonly id: string
 }
+// Speedle : soumis via l'edge function depuis 2026-07-12 (l'insert direct client
+// était bloqué par RLS). generate = grille canonique pour revalider les mots.
 export interface SpeedleMode {
   readonly kind: 'speedle'
   readonly id: string
+  readonly startSecs: number
+  generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 
 export type DailyMode = PyramidMode | MarathonMode | RuddleMode | SpeedleMode
@@ -410,7 +413,56 @@ export const marathonMode: MarathonMode = {
 // ─── Ruddle / Speedle (défense en profondeur, pas de generate) ────────────────
 
 export const ruddleMode: RuddleMode = { kind: 'ruddle', id: 'ruddle' }
-export const speedleMode: SpeedleMode = { kind: 'speedle', id: 'speedle' }
+
+// ⚠ DOIT rester identique à generateSpeedleGrid de src/lib/dailyModes.ts (client)
+// pour produire la même grille déterministe.
+function generateSpeedleGrid(
+  seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const numericSeed = seedFromString(seed)
+  const rand = mulberry32(numericSeed)
+
+  let bestGrid: Grid | null = null
+  let bestWords: Set<string> = new Set()
+  let bestScore = -1
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS_DAILY; attempt++) {
+    const grid = generateRandomGrid(rand, 4)
+    const words = findAllWords(grid, trie, 3, 10)
+    const capCount = [...words].filter((w) => w.length >= 8).length
+    if (words.size >= 100 && capCount >= 2 && capCount <= 5) {
+      return { grid, validWords: words }
+    }
+    const score = words.size - Math.abs(capCount - 3) * 100
+    if (score > bestScore) {
+      bestScore = score
+      bestGrid = grid
+      bestWords = words
+    }
+  }
+
+  return { grid: bestGrid ?? generateRandomGrid(rand, 4), validWords: bestWords }
+}
+
+export const speedleMode: SpeedleMode = {
+  kind: 'speedle',
+  id: 'speedle',
+  startSecs: 45,
+  generate(seed, trie) {
+    return generateSpeedleGrid(seed, trie)
+  },
+}
+
+// Barème Speedle — DOIT rester identique à src/lib/speedleScoring.ts (client).
+const SPEEDLE_BONUS_TABLE: Record<number, number> = {
+  3: 1, 4: 2, 5: 4, 6: 5, 7: 7, 8: 10,
+}
+export function speedleSecsBonus(len: number): number {
+  if (len < 3) return 0
+  if (len >= 8) return SPEEDLE_BONUS_TABLE[8]
+  return SPEEDLE_BONUS_TABLE[len] ?? 0
+}
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 

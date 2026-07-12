@@ -53,7 +53,10 @@ export interface DailyResultPayload {
 // Modes qui font insert direct client (pas d'anti-cheat serveur).
 // Les autres passent par l'Edge Function submit_daily qui régénère la grille
 // et recalcule le score canoniquement côté serveur.
-const DIRECT_INSERT_MODES = new Set(['ruddle', 'speedle'])
+// ⚠ Speedle retiré le 2026-07-12 : l'insert direct était bloqué par RLS en prod
+// (policy client absente) → passage par l'edge function avec validation complète
+// (mots revalidés, temps borné par startSecs + Σ bonus).
+const DIRECT_INSERT_MODES = new Set(['ruddle'])
 
 async function submitDailyResultViaEdgeFunction(payload: DailyResultPayload): Promise<void> {
   const { data, error } = await supabase.functions.invoke('submit_daily', {

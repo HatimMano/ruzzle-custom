@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { RefreshCw, X } from "lucide-react";
 import Grid from "./Grid";
 import Timer from "./Timer";
@@ -63,6 +64,11 @@ export default function PlayingScreen({
   onWordSubmit,
   onEndGame,
 }: Props) {
+  const cap = dailyMode ? dailyMode.pyramidLengths[dailyMode.pyramidLengths.length - 1] : 0;
+  const capCount = useMemo(
+    () => (dailyMode ? [...validWords].filter((w) => w.length >= cap).length : 0),
+    [dailyMode, validWords, cap],
+  );
   return (
     <div className="h-dvh bg-slate-900 flex flex-col max-w-md mx-auto overflow-hidden">
       {/* Header */}
@@ -229,6 +235,7 @@ export default function PlayingScreen({
 
         {/* Pyramid strip (daily) or found words strip (normal) */}
         {isDailyChallenge && dailyMode ? (
+          <>
           <div className="flex gap-1.5 w-full">
             {dailyMode.pyramidLengths.map((len) => {
               const word = pyramidFound[len];
@@ -255,6 +262,10 @@ export default function PlayingScreen({
               );
             })}
           </div>
+          <p className="text-[11px] text-slate-500 font-medium">
+            {capCount} mot{capCount > 1 ? "s" : ""} de {cap}L+ sur cette grille
+          </p>
+          </>
         ) : foundWords.length > 0 ? (
           <div className="w-full overflow-x-auto flex gap-2 pb-0.5" style={{ scrollbarWidth: "none" }}>
             {[...foundWords]

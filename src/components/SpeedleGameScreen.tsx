@@ -31,7 +31,7 @@ interface Props {
 import { speedleSecsBonus as secsBonus } from '../lib/speedleScoring'
 
 export default function SpeedleGameScreen({
-  mode, grid, onComplete, onAbandon, onRequestConfirm,
+  mode, grid, validWords, onComplete, onAbandon, onRequestConfirm,
 }: Props) {
   const [foundWords, setFoundWords] = useState<string[]>([])
   const [timeMs, setTimeMs] = useState(mode.startSecs * 1000)
@@ -160,7 +160,9 @@ export default function SpeedleGameScreen({
           <span style={{ fontSize: '2.5rem', fontWeight: 900, color: 'white', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
             {foundWords.length}
           </span>
-          <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>mots</span>
+          <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+            / {validWords.size} mots
+          </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem', minWidth: '4rem' }}>
           {bonusFlash !== null && (

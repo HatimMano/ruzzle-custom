@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { fetchDailyLeaderboard } from "../../lib/api";
 import type { LeaderboardEntry } from "../../lib/api";
+import { useDailyLeaderboard } from "../../hooks/useDailyLeaderboard";
 
 interface Props {
   date: string;
@@ -24,15 +23,7 @@ const defaultScoreLabel = (entry: LeaderboardEntry) => ({
 });
 
 export default function LeaderboardTab({ date, modeId, scoreLabel = defaultScoreLabel }: Props) {
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchDailyLeaderboard(date, modeId)
-      .then(setEntries)
-      .finally(() => setLoading(false));
-  }, [date, modeId]);
+  const { leaderboard: entries, loading } = useDailyLeaderboard(date, modeId, true);
 
   if (loading) {
     return (

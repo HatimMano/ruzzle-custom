@@ -1,12 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Copy, Home } from "lucide-react";
 import { scoreForLen } from "../lib/scoring";
 import { scoreForWord } from "../lib/scoring";
 import { findWordPath } from "../lib/gridGenerator";
 import type { Cell, Grid as GridType } from "../lib/gridGenerator";
 import Grid from "./Grid";
-import { fetchDailyLeaderboard } from "../lib/api";
-import type { LeaderboardEntry } from "../lib/api";
+import { useDailyLeaderboard } from "../hooks/useDailyLeaderboard";
 import {
   isPyramidComplete,
   pyramidLevelsFound,
@@ -105,8 +104,9 @@ export default function DailyResultsScreen({
   const [tab, setTab] = useState<Tab>("pyramide");
   const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const { leaderboard, loading: leaderboardLoading } = useDailyLeaderboard(
+    date, mode.id, tab === "classement",
+  );
   const copiedTimer = useRef<number>(0);
 
   const completed = isPyramidComplete(mode, pyramidFound);
@@ -126,15 +126,6 @@ export default function DailyResultsScreen({
     if (!pyramidFound[l]) return acc;
     return acc + scoreForLen(l);
   }, 0);
-
-  useEffect(() => {
-    if (tab !== "classement") return;
-    if (leaderboard.length > 0) return;
-    setLeaderboardLoading(true);
-    fetchDailyLeaderboard(date, mode.id)
-      .then(setLeaderboard)
-      .finally(() => setLeaderboardLoading(false));
-  }, [tab, date, mode.id, leaderboard.length]);
 
   function copySummary() {
     const lines = [

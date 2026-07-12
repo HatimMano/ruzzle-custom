@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Home } from "lucide-react";
 import { scoreForLen, scoreForWord } from "../lib/scoring";
 import {
@@ -9,8 +9,7 @@ import {
 import { findWordPath } from "../lib/gridGenerator";
 import type { Grid as GridType } from "../lib/gridGenerator";
 import Grid from "./Grid";
-import { fetchDailyLeaderboard } from "../lib/api";
-import type { LeaderboardEntry } from "../lib/api";
+import { useDailyLeaderboard } from "../hooks/useDailyLeaderboard";
 import type { TriddleResult } from "./TriddleGameScreen";
 
 type Tab = "pyramides" | "classement" | "mots";
@@ -49,8 +48,9 @@ export default function TriddleResultsScreen({
   onBack,
 }: Props) {
   const [tab, setTab] = useState<Tab>("pyramides");
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const { leaderboard, loading: leaderboardLoading } = useDailyLeaderboard(
+    date, mode.id, tab === "classement",
+  );
   const [activeGridTab, setActiveGridTab] = useState<number>(0);
   const [discoveryWord, setDiscoveryWord] = useState<string | null>(null);
 
@@ -61,14 +61,6 @@ export default function TriddleResultsScreen({
   const maxPerGrid = mode.pyramidLengths.reduce((s, l) => s + scoreForLen(l), 0);
   const maxTotal = maxPerGrid * mode.gridCount;
 
-  useEffect(() => {
-    if (tab !== "classement") return;
-    if (leaderboard.length > 0) return;
-    setLeaderboardLoading(true);
-    fetchDailyLeaderboard(date, mode.id)
-      .then(setLeaderboard)
-      .finally(() => setLeaderboardLoading(false));
-  }, [tab, date, mode.id, leaderboard.length]);
 
   return (
     <div

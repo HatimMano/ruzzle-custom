@@ -19,6 +19,11 @@ interface Props {
 
 const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
+// Dates où l'onglet Mots est masqué : défi relancé en cours de journée
+// (grille remplacée) — les "déjà soumis" du matin spoileraient la nouvelle
+// grille via la liste des mots. Ex : 12/07 reset Speedle, 10/07 grille Taha.
+const HIDE_WORDS_DATES = new Set(["2026-07-12"]);
+
 function fmtTime(secs: number) {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
@@ -231,7 +236,7 @@ export default function LeaderboardDrawer({
         {/* (Indentation préservée pour minimiser le diff) */}
         <div style={{ display: "flex", background: "rgba(30,41,59,0.9)", borderRadius: "999px", padding: "0.25rem", gap: "0.25rem" }}>
           {([['jour', '🏆 Jour'], ['classement', '⭐ Classement'], ['mots', '🔤 Mots']] as const)
-            .filter(([id]) => !(id === 'mots' && mode.id === 'birthday-taha-2026-07-10'))
+            .filter(([id]) => !(id === 'mots' && HIDE_WORDS_DATES.has(date)))
             .map(([id, label]) => {
             const showBadge = id === 'classement' && !classementSeen;
             return (

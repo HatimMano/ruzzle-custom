@@ -190,13 +190,20 @@ begin
     daily_streak          = new_streak,
     best_daily_streak     = new_best_str,
     last_daily_date       = new.date::date,
-    best_daily_score      = greatest(best_daily_score, new.score),
+    -- Speedle/Ruddle exclus : leur score est un composite de tri (survie×1M…)
+    -- qui écraserait best/total, et leur elapsed = survie (pas une complétion).
+    best_daily_score      = case
+      when new.mode in ('speedle', 'ruddle') then best_daily_score
+      else greatest(best_daily_score, new.score)
+    end,
     fastest_complete_secs = case
-      when new.completed
+      when new.completed and new.mode not in ('speedle', 'ruddle')
         then least(coalesce(fastest_complete_secs, new.elapsed_secs), new.elapsed_secs)
       else fastest_complete_secs
     end,
-    total_score           = total_score + new.score,
+    total_score           = total_score + case
+      when new.mode in ('speedle', 'ruddle') then 0 else new.score
+    end,
     total_words_found     = total_words_found + coalesce(array_length(new.found_words, 1), 0),
     total_letters_found   = total_letters_found + coalesce(
       (select sum(length(word)) from unnest(new.found_words) word), 0

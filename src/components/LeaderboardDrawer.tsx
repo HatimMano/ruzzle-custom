@@ -294,6 +294,9 @@ export default function LeaderboardDrawer({
             {leaderboardLoading && <p className="text-slate-600 text-sm text-center py-6">Chargement…</p>}
             {!leaderboardLoading && leaderboard.length === 0 && <p className="text-slate-600 text-sm text-center py-6">Aucun résultat pour aujourd'hui</p>}
             {!leaderboardLoading && leaderboard.map((entry) => {
+              // Speedle : le score DB est un composite de tri (survie×1M + mots×100
+              // + maxLen) — on affiche la survie, jamais le composite brut.
+              const isSpeedleEntry = entry.mode === 'speedle';
               const displayScore = entry.score + Math.max(0, 4 - entry.rank);
               return (
                 <div
@@ -308,10 +311,14 @@ export default function LeaderboardDrawer({
                   </span>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem", flexShrink: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
-                      <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>{displayScore} pts</p>
+                      <p style={{ fontWeight: 600, color: entry.is_me ? "#fbbf24" : "white", fontSize: "0.9rem" }}>
+                        {isSpeedleEntry ? `${fmtTime(entry.elapsed_secs)} survie` : `${displayScore} pts`}
+                      </p>
                       {entry.rank <= 3 && <span style={{ fontSize: "0.6rem", color: "#475569" }}>+{4 - entry.rank}</span>}
                     </div>
-                    <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
+                    {!isSpeedleEntry && (
+                      <p style={{ fontSize: "0.7rem", color: "#64748b" }}>{fmtTime(entry.elapsed_secs)}</p>
+                    )}
                     <ProgressStrip mode={mode} pyramidFound={entry.pyramid_found} wordCount={entry.levels_found} />
                   </div>
                   <span style={{ fontSize: "1.1rem", color: "#475569", fontWeight: 400, flexShrink: 0, marginLeft: "-0.15rem" }}>›</span>

@@ -170,6 +170,7 @@ function generatePyramidGrid(
 
 const SEED_OVERRIDES: Record<string, string> = {
   '2026-05-02': '2026-05-02-v2',
+  '2026-07-12': '2026-07-12-v2',  // reset Speedle (bug RLS insert direct)
 }
 function effectiveSeed(date: string): string {
   return SEED_OVERRIDES[date] ?? date
@@ -450,7 +451,7 @@ export const speedleMode: SpeedleMode = {
   id: 'speedle',
   startSecs: 45,
   generate(seed, trie) {
-    return generateSpeedleGrid(seed, trie)
+    return generateSpeedleGrid(effectiveSeed(seed), trie)
   },
 }
 

@@ -284,6 +284,9 @@ function generatePyramidGrid(
 // Override de seed (rejouer un défi avec un seed alternatif après changement de dico)
 const SEED_OVERRIDES: Record<string, string> = {
   '2026-05-02': '2026-05-02-v2',
+  // Reset Speedle 12/07 : leaderboard vide (bug RLS insert direct) → nouvelle
+  // grille pour que tout le monde rejoue à armes égales
+  '2026-07-12': '2026-07-12-v2',
 }
 
 function effectiveSeed(date: string): string {

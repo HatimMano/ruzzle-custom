@@ -164,10 +164,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Ruddle : jamais en rotation daily, insert direct historique. Refus explicite.
-  if (isRuddleMode(mode)) {
-    return jsonResponse({ error: 'submit_via_direct_insert', mode: mode.id }, 400)
-  }
 
   // Charge le dico
   const { wordSet, trie } = await loadDictionary()
@@ -240,6 +236,21 @@ Deno.serve(async (req) => {
     const maxLen = canonicalFoundWords.reduce((m, w) => Math.max(m, w.length), 0)
     canonicalScore = canonicalElapsed * 1_000_000 + canonicalFoundWords.length * 100 + maxLen
     canonicalCompleted = true // le sablier finit toujours par tomber
+    canonicalLevelsFound = canonicalFoundWords.length
+    canonicalPyramid = {}
+  } else if (isRuddleMode(mode)) {
+    // Ruddle : mots revalidés (dico + traçables + longueur min), score = somme
+    // des points par mot (même barème scoreForLen que le client), temps borné
+    // par la durée du mode.
+    const { grid } = mode.generate(payload.date, trie)
+    canonicalFoundWords = [...new Set(
+      (payload.foundWords || [])
+        .filter((w) => typeof w === 'string')
+        .map((w) => w.toLowerCase())
+    )].filter((w) => w.length >= mode.minWordLen && wordSet.has(w) && findWordPath(grid, w))
+    canonicalElapsed = Math.min(Math.floor(payload.elapsedSecs), mode.durationSecs)
+    canonicalScore = canonicalFoundWords.reduce((acc, w) => acc + scoreForLen(w.length), 0)
+    canonicalCompleted = true // le chrono s'écoule inévitablement
     canonicalLevelsFound = canonicalFoundWords.length
     canonicalPyramid = {}
   } else {

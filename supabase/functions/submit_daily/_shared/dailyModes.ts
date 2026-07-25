@@ -32,11 +32,14 @@ export interface MarathonMode {
   generate(seed: string, trie: Trie): { grids: Grid[]; validWordsPerGrid: Set<string>[] }
 }
 
-// Ruddle : mode côté serveur uniquement pour cohérence dispatch (insert direct
-// client historique — cassé par RLS, mode jamais en rotation daily).
+// Ruddle : en rotation dominicale depuis le 02/08/2026 → soumis via l'edge
+// function (l'insert direct historique était bloqué par RLS).
 export interface RuddleMode {
   readonly kind: 'ruddle'
   readonly id: string
+  readonly durationSecs: number
+  readonly minWordLen: number
+  generate(seed: string, trie: Trie): { grid: Grid; validWords: Set<string> }
 }
 // Speedle : soumis via l'edge function depuis 2026-07-12 (l'insert direct client
 // était bloqué par RLS). generate = grille canonique pour revalider les mots.
@@ -413,7 +416,45 @@ export const marathonMode: MarathonMode = {
 
 // ─── Ruddle / Speedle (défense en profondeur, pas de generate) ────────────────
 
-export const ruddleMode: RuddleMode = { kind: 'ruddle', id: 'ruddle' }
+// ⚠ DOIT rester identique à generateGrid de src/lib/gridGenerator.ts (client,
+// minLetters=3 → minWords=120, MAX_ATTEMPTS=500) pour la même grille déterministe.
+const RUDDLE_MAX_ATTEMPTS = 500
+const RUDDLE_MIN_WORDS = 120
+
+function generateRuddleGrid(
+  seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const numericSeed = seedFromString(seed)
+  const rand = mulberry32(numericSeed)
+
+  let bestGrid: Grid | null = null
+  let bestWords: Set<string> = new Set()
+
+  for (let attempt = 0; attempt < RUDDLE_MAX_ATTEMPTS; attempt++) {
+    const grid = generateRandomGrid(rand, 4)
+    const words = findAllWords(grid, trie, 3, 10)
+    if (words.size >= RUDDLE_MIN_WORDS) {
+      return { grid, validWords: words }
+    }
+    if (words.size > bestWords.size) {
+      bestGrid = grid
+      bestWords = words
+    }
+  }
+
+  return { grid: bestGrid ?? generateRandomGrid(rand, 4), validWords: bestWords }
+}
+
+export const ruddleMode: RuddleMode = {
+  kind: 'ruddle',
+  id: 'ruddle',
+  durationSecs: 120,
+  minWordLen: 3,
+  generate(seed, trie) {
+    return generateRuddleGrid(effectiveSeed(seed), trie)
+  },
+}
 
 // ⚠ DOIT rester identique à generateSpeedleGrid de src/lib/dailyModes.ts (client)
 // pour produire la même grille déterministe.
@@ -480,11 +521,11 @@ function isSunday(date: string): boolean {
   return d.getUTCDay() === 0
 }
 
-// Dimanche = défi spécial en rotation depuis le 2026-07-05.
-// Cycle 3 semaines : Triddle (marathonMode) → Speedle → BiGriddle → Triddle → ...
-// DOIT rester en sync avec src/lib/dailyModes.ts côté client.
-const SUNDAY_REF = new Date('2026-07-05T00:00:00Z')
-const SUNDAY_CYCLE: readonly DailyMode[] = [marathonMode, speedleMode, bigriddleMode]
+// Dimanche = défi spécial en rotation.
+// Cycle 4 semaines depuis le 2026-07-26 : Triddle (marathonMode) → Ruddle →
+// Speedle → BiGriddle. DOIT rester en sync avec src/lib/dailyModes.ts côté client.
+const SUNDAY_REF = new Date('2026-07-26T00:00:00Z')
+const SUNDAY_CYCLE: readonly DailyMode[] = [marathonMode, ruddleMode, speedleMode, bigriddleMode]
 function sundayMode(date: string): DailyMode {
   const d = new Date(`${date}T00:00:00Z`)
   const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))

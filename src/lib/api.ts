@@ -50,14 +50,11 @@ export interface DailyResultPayload {
   pyramidFound: PyramidFoundPayload
 }
 
-// Modes qui font insert direct client (pas d'anti-cheat serveur).
-// Les autres passent par l'Edge Function submit_daily qui régénère la grille
-// et recalcule le score canoniquement côté serveur.
-// ⚠ Speedle retiré le 2026-07-12 : l'insert direct était bloqué par RLS en prod
-// (policy client absente) → passage par l'edge function avec validation complète
-// (mots revalidés, temps borné par startSecs + Σ bonus).
-const DIRECT_INSERT_MODES = new Set(['ruddle'])
-
+// Tous les modes passent par l'Edge Function submit_daily : elle régénère la
+// grille serveur, revalide les mots et recalcule le score canoniquement.
+// (L'insert direct client historique de Ruddle/Speedle était de toute façon
+// bloqué par RLS en prod — supprimé le 2026-07-25 avec l'entrée de Ruddle en
+// rotation dominicale.)
 async function submitDailyResultViaEdgeFunction(payload: DailyResultPayload): Promise<void> {
   const { data, error } = await supabase.functions.invoke('submit_daily', {
     body: {
@@ -79,37 +76,8 @@ async function submitDailyResultViaEdgeFunction(payload: DailyResultPayload): Pr
   console.log('[submitDailyResult] success', data)
 }
 
-async function submitDailyResultDirect(payload: DailyResultPayload): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession()
-  const userId = session?.user?.id
-  if (!userId) { console.error('[submitDailyResult] no auth session'); return }
-  const { error } = await supabase.from('daily_results').insert({
-    user_id: userId,
-    date: payload.date,
-    mode: payload.mode,
-    elapsed_secs: Math.floor(payload.elapsedSecs),
-    completed: payload.completed,
-    levels_found: payload.levelsFound,
-    score: payload.score,
-    found_words: payload.foundWords,
-    pyramid_found: payload.pyramidFound,
-  })
-  if (error) {
-    if ((error as { code?: string }).code === '23505') {
-      console.warn('[submitDailyResult] already submitted for today')
-      return
-    }
-    console.error('[submitDailyResult] direct insert error:', error)
-    return
-  }
-  console.log('[submitDailyResult] direct insert success')
-}
-
 export async function submitDailyResult(payload: DailyResultPayload): Promise<void> {
   await ensureAuth()
-  if (DIRECT_INSERT_MODES.has(payload.mode)) {
-    return submitDailyResultDirect(payload)
-  }
   return submitDailyResultViaEdgeFunction(payload)
 }
 

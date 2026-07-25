@@ -50,9 +50,14 @@ Tout terme technique nouveau introduit en chat ou dans le code → 3 lignes dans
 Le score = somme des **scores des créneaux pyramide remplis**, pas des mots trouvés. Un mot long peut remplir un créneau plus court (règle "plus long créneau vide ≤ longueur du mot"). Voir `pyramidSlotForWord` dans [`src/lib/dailyModes.ts`](src/lib/dailyModes.ts). Ne s'applique PAS à Ruddle (score Ruzzle standard cumulé) ni à Speedle (score composite survie/mots/mot le plus long).
 
 ### Anti-cheat
-Modes **pyramide** (Pyramiddle, BiGriddle, Triddle) : toute soumission passe par l'Edge Function `submit_daily` ([`supabase/functions/submit_daily/`](supabase/functions/submit_daily/)). Le client ne dicte pas le score — le serveur régénère la grille et recalcule. RLS d'INSERT direct côté client toujours autorisée (auth.uid = user_id) mais seule l'Edge Function insère en pratique pour ces modes.
+**TOUS les modes passent par l'Edge Function `submit_daily`** ([`supabase/functions/submit_daily/`](supabase/functions/submit_daily/)) depuis le 2026-07-25. Le client ne dicte jamais le score — le serveur régénère la grille et recalcule :
+- **Pyramide** (Pyramiddle, BiGriddle, Triddle) : pyramide canonique reconstruite mot par mot.
+- **Speedle** (depuis 12/07) : mots revalidés (dico + traçables), temps de survie **borné par `startSecs + Σ bonus des mots validés`** (un claim de 5000s avec 3 mots retombe à ~61s), score composite recalculé.
+- **Ruddle** (depuis 25/07) : mots revalidés, score = Σ `scoreForLen`, temps borné à `durationSecs` (120s).
 
-Modes **non-pyramide** (Ruddle, Speedle) : **insert direct client** (bypass Edge Function). Le score n'est pas anti-cheatable côté serveur car le mode n'est pas pyramidal (pas de canonique à recalculer). Compromis dev/prod assumé (v1). Liste hardcodée dans `DIRECT_INSERT_MODES` de [`src/lib/api.ts`](src/lib/api.ts).
+⚠ **Piège historique (incident 12/07)** : la policy RLS d'INSERT client sur `daily_results` n'existe PAS en prod (supprimée à la mise en place de l'edge function). L'ancien chemin "insert direct client" de Ruddle/Speedle échouait **silencieusement** (42501) → leaderboard Speedle vide à son premier dimanche. `DIRECT_INSERT_MODES` a été supprimé de [`src/lib/api.ts`](src/lib/api.ts) — ne jamais réintroduire d'insert direct sans recréer la policy.
+
+⚠ **Trigger `player_stats`** (`update_stats_on_daily`, [`supabase_migration.sql`](supabase_migration.sql)) : Speedle/Ruddle sont **exclus** de `best_daily_score`, `fastest_complete_secs` et `total_score` (leur score est un composite de tri et leur elapsed = survie, pas une complétion — une survie de 5s écraserait le record vitesse ⚡).
 
 ### Génération de grille = déterministe
 Même date → même grille pour tous les joueurs (et pour le serveur). Le PRNG est `mulberry32` seedé depuis `seedFromString(date)`. Toute modification de la génération doit être synchronisée entre [`src/lib/gridGenerator.ts`](src/lib/gridGenerator.ts) et [`supabase/functions/submit_daily/_shared/gridGenerator.ts`](supabase/functions/submit_daily/_shared/gridGenerator.ts) **avant** un déploiement, sinon le serveur valide une grille différente que celle vue par les joueurs.
@@ -71,9 +76,11 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 ⚠ Triddle a `mode.id='marathon'` conservé pour compat DB (résultats existants du test 2026-05-17 + edge function accepte 'marathon'). Le nom code est Triddle partout (types, fichiers, adapter). Voir commentaire dans [`dailyModes.ts`](src/lib/dailyModes.ts).
 
 **Calendrier hebdo** :
-- Lundi–Samedi = Pyramiddle
-- Dimanche = alternance Triddle / BiGriddle (semaine 0 = 2026-07-05 Triddle, semaine 1 = BiGriddle, etc.)
-- Overrides `?mode=<id>` : `ruddle`, `speedle`, `triddle`, `bigriddle`, `classic`. Aliases historiques `eclair` (→ruddle), `infini` (→speedle), `marathon` (→triddle) conservés.
+- Lundi–Samedi = Pyramiddle (sauf dates spéciales `SPECIAL_DATES` : anniversaires avec grilles fixes — `birthday-2026-04-30` Happy 60, `birthday-fate-2026-06-30`, `birthday-taha-2026-07-10`, `birthday-hatim-2026-07-11` Happy 30 Mano)
+- Dimanche = **cycle 4 semaines** depuis `SUNDAY_REF = 2026-07-26` : Triddle → Ruddle → Speedle → BiGriddle (premier Ruddle dominical : 02/08/2026). ⚠ `modeForDate` sur les dimanches AVANT le 26/07 ne reflète plus l'historique réel (documenté dans le code, sans impact).
+- Overrides `?mode=<id>` : `ruddle`, `speedle`, `triddle`, `bigriddle`, `classic`. Aliases historiques `eclair` (→ruddle), `infini` (→speedle), `marathon` (→triddle) conservés. Preview d'un jour futur : `?daily=YYYY-MM-DD`.
+- `SEED_OVERRIDES` (client + serveur) : permet de remplacer la grille d'une date (ex : `2026-07-12` → `-v2` lors du reset Speedle). À utiliser pour tout reset de défi en cours de journée — coupler avec `HIDE_WORDS_DATES` dans [`LeaderboardDrawer.tsx`](src/components/LeaderboardDrawer.tsx) (masque l'onglet Mots du jour pour que les "déjà soumis" du matin ne spoilent pas la nouvelle grille).
+- **Mots bonus hors dico** (ex : `donkey`, `dreamtim` pour les anniversaires) : `addBonusWords` client ([`dictionary.ts`](src/lib/dictionary.ts)) + `MODE_BONUS_WORDS` serveur (injectés dans wordSet/trie avant validation).
 
 **Mode Adapter Pattern** (refacto 2026-07-04) : chaque mode expose un `ModeAdapter<TState, TResult>` dans [`src/lib/modes/<mode>.tsx`](src/lib/modes/) avec `init()`, `GameScreen`, `ResultsScreen`, `buildSubmitPayload()`. Dispatch par `mode.kind` dans [`registry.ts`](src/lib/modes/registry.ts). Ajouter un nouveau mode = 1 fichier `<mode>.tsx` + 1 GameScreen + 1 ResultsScreen + 1 entrée dans le registry. App.tsx opère sur le state/result opaque via l'adapter, aucune branche par mode.
 
@@ -81,7 +88,7 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 - `minWordsAtCap` = force au moins N mots au niveau plafond de la pyramide (garantit qu'il existe des alternatives au mot le plus long).
 - `maxWordsAtCap` = limite le nombre de mots ≥ cap. Appliqué sur `classicMode` (=5) pour éviter les grilles trop faciles. À réévaluer avant d'étendre à d'autres modes.
 
-**Scoring Speedle** : score composite 3 tiers `survivedSecs × 1_000_000 + wordCount × 100 + maxWordLen`. Ordre de tri : survie > nb mots > mot le plus long. Défini dans [`speedle.tsx`](src/lib/modes/speedle.tsx) (adapter). Bonus temps par mot : courbe convexe `3=1, 4=2, 5=4, 6=7, 7=11, 8+=15` dans [`speedleScoring.ts`](src/lib/speedleScoring.ts).
+**Scoring Speedle** : score composite 3 tiers `survivedSecs × 1_000_000 + wordCount × 100 + maxWordLen`. Ordre de tri : survie > nb mots > mot le plus long. **Le composite ne doit JAMAIS être affiché brut** — afficher `elapsed_secs` (survie) + `levels_found` (mots), cf. `speedleLeaderboardLabel` et le cas `isSpeedleEntry` du drawer. Bonus temps par mot : `3=1, 4=2, 5=4, 6=5, 7=7, 8+=10` dans [`speedleScoring.ts`](src/lib/speedleScoring.ts) (courbe aplatie le 11/07, 8L+ relevé à +10 car la grille garantit la rareté). Barème dupliqué serveur dans `_shared/dailyModes.ts` — à modifier ensemble. **Grille Speedle contrainte** : `generateSpeedleGrid` exige ≥100 mots et **2-5 mots de 8L+** (vérifiable via [`scripts/check-speedle-grid.mjs`](scripts/check-speedle-grid.mjs) pour les dimanches à venir).
 
 **Scoring Ruddle** : `scoreForWord` standard (`3=1, 4=1, 5=2, 6=4, 7=7, 8+=12`) cumulé sur 2 min.
 
@@ -95,18 +102,21 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 - Sources : RPC SQL dans [`supabase_migration_leaderboard.sql`](supabase_migration_leaderboard.sql). Timezone `Europe/Paris` hardcodée dans toutes les bornes date (pas `current_date` UTC).
 
 ### Sync Edge Function : règle d'or
-S'applique aux **modes pyramide uniquement** (Ruddle/Speedle passent par insert direct client, cf. Anti-cheat). Toute modification qui affecte le calcul serveur doit être répercutée dans [`supabase/functions/submit_daily/_shared/`](supabase/functions/submit_daily/_shared/) **avant** ou en même temps que le deploy Vercel. Fichiers concernés typiques :
-- `dailyModes.ts` (nouveau mode pyramide, nouvelle date spéciale, `maxWordsAtCap`, `SUNDAY_CYCLE`, etc.)
+S'applique à **tous les modes** (tout passe par l'edge function depuis le 25/07). Toute modification qui affecte le calcul serveur doit être répercutée dans [`supabase/functions/submit_daily/_shared/`](supabase/functions/submit_daily/_shared/) **avant** ou en même temps que le deploy Vercel, puis `npx supabase functions deploy submit_daily`. Fichiers concernés typiques :
+- `dailyModes.ts` (nouveau mode, date spéciale, `SUNDAY_CYCLE`/`SUNDAY_REF`, `SEED_OVERRIDES`, générateurs `generateSpeedleGrid`/`generateRuddleGrid`, barème Speedle, `MODE_BONUS_WORDS`)
 - `gridGenerator.ts` (logique de génération, distribution des lettres)
 - `dictionary.ts` (mots ajoutés/retirés)
 - `scoring.ts` (règles de points)
 
-Sans redéploiement de l'Edge Function, les soumissions pyramide des joueurs seront **rejetées silencieusement** (le serveur régénère une grille différente que celle vue par le client).
+Sans redéploiement de l'Edge Function, les soumissions des joueurs seront **rejetées silencieusement** (le serveur régénère une grille différente que celle vue par le client).
 
-**Sync unifiée depuis 2026-07-05** : le server connaît maintenant Ruddle/Speedle (types minimaux, sans generate) + la rotation dimanche à 3 modes. Si un claim ruddle/speedle arrive à l'edge function (bug ou tentative), elle renvoie `400 { error: 'submit_via_direct_insert' }`. Le server est également l'autorité pour le dispatch dimanche : `SUNDAY_CYCLE` doit rester en sync côté client + server.
+**Race condition résolue (12/07)** : la validation serveur prend plusieurs secondes (régénération de grille) → l'onglet Classement post-partie re-fetch tant que `is_me` est absent (hook [`useDailyLeaderboard`](src/hooks/useDailyLeaderboard.ts), max 4×/2.5s), utilisé par les 3 écrans de résultats.
 
 ### Scripts d'optimisation offline
-Pour les grilles thématiques (anniversaires, événements), utiliser un script node en DFS sur la grille avec le trie du dico complet. Exemple : [`scripts/optimize-birthday-fate.mjs`](scripts/optimize-birthday-fate.mjs) — teste 30k combinaisons des cases libres et garde la meilleure au sens weighted-score par longueur. Réutilisable : modifier `FIXED` (cases fixes) et `FREE_CELLS`, re-run.
+Pour les grilles thématiques (anniversaires, événements) :
+- [`scripts/optimize-birthday-taha.mjs`](scripts/optimize-birthday-taha.mjs) — **le plus récent et générique** : backtracking de placement de N mots arbitraires (partage de cases si même lettre) puis remplissage optimisé des cases libres. Usage : `node scripts/optimize-birthday-taha.mjs [fills] "mot1,mot2,mot3" [maxCap8]`. Early-stop 200k placements (OOM sinon avec ≤2 mots). Faisabilité 4×4 : compter l'union des lettres avec multiplicité max par mot — si > 16 c'est mathématiquement infaisable, inutile de lancer.
+- [`scripts/optimize-birthday-fate.mjs`](scripts/optimize-birthday-fate.mjs) — ancêtre à chemins fixes (`FIXED`/`FREE_CELLS` hardcodés).
+- [`scripts/check-speedle-grid.mjs`](scripts/check-speedle-grid.mjs) — réplique `generateSpeedleGrid` pour auditer la grille d'une date (contrainte 2-5 mots 8L+).
 
 ## Flow de déploiement
 
@@ -117,9 +127,13 @@ supabase functions deploy X  → deploy Edge Function (manuel)
 
 Vercel auto-deploy ne marche pas toujours sur ce projet — fallback `vercel --prod --yes` depuis le dossier projet.
 
-**Alias Vercel** : `ruzzle-custom.vercel.app` ne se ré-alias PAS automatiquement au deploy. Après `vercel --prod`, faire `vercel alias set <new-deploy-url> ruzzle-custom.vercel.app` (l'URL du deploy est affichée par la commande précédente).
+**Alias Vercel** : `ruzzle-custom.vercel.app` est ré-aliasé **automatiquement** à chaque `vercel --prod` depuis le 05/07 (`"alias"` dans [`vercel.json`](vercel.json)). ⚠ Le projet Vercel s'appelle `griddle` (les URLs de deploy sont `griddle-*.vercel.app`), seul l'alias porte le nom ruzzle-custom.
 
-**Supabase CLI** : pas installé globalement. Utiliser `npx supabase functions deploy submit_daily` (avec `nvm use 20` pour éviter le bug node symbol du homebrew).
+**Cache navigateur** : `vercel.json` force `no-cache, must-revalidate` sur `index.html` (incident Kmano 05/07 : bundle stale = mauvais mode du jour affiché). Les assets JS hashés restent cachés infiniment — c'est le HTML qui doit revalider. Sur iPhone, un cache déjà stale se purge via un lien avec query param bidon (`?v=x`).
+
+**Supabase CLI** : pas installé globalement. Utiliser `npx supabase functions deploy submit_daily` (avec `nvm use 20` pour éviter le bug node symbol du homebrew — `source ~/.nvm/nvm.sh && nvm use 20` requis aussi pour vite/vercel, le shell par défaut est sur Node 18).
+
+**MCP Supabase non configuré pour ce projet** (token = projet Merveil). Pour requêter la DB : script node avec l'anon key de `.env.local` (RLS s'applique), ou SQL editor du dashboard (manuel, par Hatim).
 
 ## Pour démarrer une session sur Ruzzle
 

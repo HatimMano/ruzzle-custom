@@ -15,6 +15,43 @@ Format type :
 
 ---
 
+## 2026-07-25 — Ruddle en rotation + fin de l'insert direct (tous modes via edge function)
+
+**Trigger** : demande d'ajouter Ruddle au cycle dominical (premier passage 02/08). Or Ruddle utilisait encore l'insert direct client, chemin prouvé cassé par l'incident Speedle du 12/07.
+
+**Options envisagées** :
+- a) Recréer la policy RLS d'INSERT client (scopée aux modes non-pyramide) — rapide mais rouvre un vecteur de triche total sur ces modes
+- b) **Passer Ruddle par l'edge function comme Speedle** — validation serveur complète, cohérence de l'archi
+
+**Choix** : b). `SUNDAY_CYCLE` à 4 modes `[triddle, ruddle, speedle, bigriddle]`, `SUNDAY_REF` déplacée au 2026-07-26 (préserve Triddle le 26/07, place Ruddle le 02/08). `generateRuddleGrid` répliqué serveur (≡ `generateGrid` client, minWords=120), score = Σ `scoreForLen`, temps borné 120s. `DIRECT_INSERT_MODES` supprimé.
+
+**Pourquoi** : l'insert direct était mort de toute façon (RLS), et la validation serveur Ruddle est triviale (mêmes primitives que Speedle).
+
+**Tradeoffs assumés** : `modeForDate` sur les dimanches < 26/07 ne reflète plus l'historique réel (05/07 résout ruddle au lieu de triddle) — sans impact car rien ne résout de mode pour une date passée ; documenté dans le code.
+
+**À surveiller** : tout nouveau mode daily DOIT avoir sa branche de validation dans `submit_daily/index.ts` + son generate dans `_shared/dailyModes.ts` AVANT son premier jour en rotation. Testé live : temps 900s borné à 120s, mots non traçables rejetés.
+
+---
+
+## 2026-07-12 — Incident leaderboard Speedle vide : RLS + validation serveur + reset
+
+**Trigger** : premier dimanche Speedle, aucun résultat en base. L'insert direct client (`DIRECT_INSERT_MODES`) échouait silencieusement : la policy RLS d'INSERT sur `daily_results` n'existe pas en prod (supprimée à la mise en place de l'edge function anti-cheat). Chemin jamais exercé avant → invisible.
+
+**Options envisagées** :
+- a) Recréer la policy INSERT scopée `mode IN ('ruddle','speedle')` — fix 1 min mais scores non validés
+- b) **Edge function avec validation Speedle** — mots revalidés, temps borné par `startSecs + Σ bonus` (anti-cheat réel sur le temps de survie), score composite recalculé serveur
+
+**Choix** : b) + reset complet du défi (SEED_OVERRIDE `2026-07-12-v2`, DELETE des rows, tout le monde rejoue). Grille v2 pour ne pas avantager ceux qui avaient vu la grille du matin ; onglet Mots masqué par date (`HIDE_WORDS_DATES`) car les localStorage "déjà soumis" donnaient accès au spoiler.
+
+**Corollaires** :
+- Trigger `player_stats` patché : Speedle/Ruddle exclus de `fastest_complete_secs` (une survie de 5s écrasait le record vitesse ⚡), `best_daily_score` et `total_score` (composite ~70M). SQL de réparation rétroactive exécuté.
+- Score composite jamais affiché brut : drawer affiche "Xs survie" (`isSpeedleEntry`).
+- Race condition résultats : l'onglet Classement post-partie fetchait avant la fin de la validation serveur (plusieurs secondes) → hook `useDailyLeaderboard` avec retry tant que `is_me` absent (4×/2.5s), partagé par les 3 écrans de résultats.
+
+**À surveiller** : les échecs d'insert silencieux (`console.error` seulement). Si un leaderboard reste vide un jour de nouveau mode, vérifier RLS en premier.
+
+---
+
 ## 2026-07-05 — Rotation dimanche 3 modes + unification edge function
 
 **Trigger** : ajout de Speedle au calendrier. On voulait un défi spécial le dimanche différent chaque semaine, sans casser Triddle/BiGriddle déjà en place. L'edge function était par ailleurs désynchronisée du client depuis le renaming Marathon→Triddle et l'ajout Ruddle/Speedle (client sait, server pas).

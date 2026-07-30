@@ -379,11 +379,45 @@ export const hatimBirthdayMode: PyramidMode = {
   },
 }
 
+// Anniversaire Ay 01/08/2026 : grille 4×4 fixe avec AYMADEIT (bonus) + ATELIER + ARTISTE.
+// Optimisée pour que AYMADEIT soit peu repérable (tracé traversant, départ au centre).
+const AY_BIRTHDAY_DATE = '2026-08-01'
+
+const AY_GRID_LETTERS: string[][] = [
+  ['m', 'y', 's', 'p'],
+  ['a', 's', 'a', 't'],
+  ['t', 'd', 'i', 'r'],
+  ['e', 'l', 'e', 's'],
+]
+
+function generateAyBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  const grid: Grid = AY_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const ayBirthdayMode: PyramidMode = {
+  kind: 'pyramid',
+  id: 'birthday-ay-2026-08-01',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  generate(seed, trie) {
+    return generateAyBirthdayGrid(seed, trie)
+  },
+}
+
 // Mots bonus hors dico par mode — index.ts les injecte dans wordSet/trie
 // avant validation pour que ces mots comptent (pyramide + foundWords).
 export const MODE_BONUS_WORDS: Record<string, string[]> = {
   'birthday-taha-2026-07-10': ['donkey'],
   'birthday-hatim-2026-07-11': ['dreamtim'],
+  'birthday-ay-2026-08-01': ['aymadeit'],
 }
 
 export const marathonMode: MarathonMode = {
@@ -513,6 +547,7 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
   [HATIM_BIRTHDAY_DATE]: hatimBirthdayMode,
+  [AY_BIRTHDAY_DATE]: ayBirthdayMode,
   '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
 }
 

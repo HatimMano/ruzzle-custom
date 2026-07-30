@@ -82,6 +82,9 @@ export default function DailyIntroModal({ mode, onClose }: Props) {
           {tagline}
         </p>
 
+        {/* Un mode peut n'avoir aucune puce (intro purement décorative) : ne pas
+            rendre la liste, sinon sa marge laisse un trou avant le bouton. */}
+        {bullets.length > 0 && (
         <ul
           style={{
             display: "flex",
@@ -120,6 +123,7 @@ export default function DailyIntroModal({ mode, onClose }: Props) {
             </li>
           ))}
         </ul>
+        )}
 
         <button
           onClick={onClose}

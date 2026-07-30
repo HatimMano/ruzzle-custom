@@ -11,6 +11,7 @@ import {
   pyramidLevelsFound,
   pyramidRows,
   levelLabel,
+  BIRTHDAY_AGE,
   type DailyModeRules,
 } from "../lib/dailyModes";
 
@@ -152,10 +153,7 @@ export default function DailyResultsScreen({
     { id: "tous", label: `Tous les mots` },
   ];
 
-  const birthdayLabel =
-    mode.id === "birthday-2026-04-30" ? "Happy 60"
-    : mode.id === "birthday-hatim-2026-07-11" ? "Happy 30"
-    : null;
+  const birthdayLabel = BIRTHDAY_AGE[mode.id] ? `Happy ${BIRTHDAY_AGE[mode.id]}` : null;
   const [birthdayOpen, setBirthdayOpen] = useState(birthdayLabel !== null);
 
   return (

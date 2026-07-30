@@ -45,12 +45,14 @@ for (let i = 0; i < SIZE * SIZE; i++) {
 
 // Place `word` sur `cells` (array de 16, lettre ou null). Yield les nouveaux
 // états de cells (copies) où le mot est traçable.
-function* placements(word, cells) {
+function* placements(word, cells, forcedStart = null) {
   const n = word.length
   function* dfs(i, cell, used, assigned) {
     if (i === n) { yield assigned; return }
     const ch = word[i]
-    const candidates = i === 0 ? [...Array(SIZE * SIZE).keys()] : NEIGHBORS[cell]
+    const candidates = i === 0
+      ? (forcedStart !== null ? [forcedStart] : [...Array(SIZE * SIZE).keys()])
+      : NEIGHBORS[cell]
     for (const nxt of candidates) {
       if (used.has(nxt)) continue
       const cur = assigned.get(nxt) ?? cells[nxt]
@@ -68,25 +70,33 @@ function* placements(word, cells) {
 // la collecte à MAX_SOLUTIONS (l'espace explose avec peu de mots à placer).
 const MAX_SOLUTIONS = 200000
 
+// ⚠ Le plafond MAX_SOLUTIONS était atteint avant que le DFS n'ait fini d'explorer
+// la case de départ 0 du premier mot : toutes les solutions collectées démarraient
+// dans le coin haut-gauche. On impose donc un quota PAR case de départ, sinon la
+// recherche de furtivité n'a qu'un seul coin de grille à se mettre sous la dent.
 function collectSolutions() {
   const seen = new Set()
-  let full = false
-  function rec(wordIdx, cells) {
-    if (full) return
-    if (wordIdx === WORDS.length) {
-      const key = cells.map(x => x ?? '.').join('')
-      if (!seen.has(key)) {
-        seen.add(key)
-        if (seen.size >= MAX_SOLUTIONS) full = true
-      }
-      return
-    }
-    for (const a of placements(WORDS[wordIdx], cells)) {
+  const QUOTA = Math.ceil(MAX_SOLUTIONS / (SIZE * SIZE))
+  for (let start = 0; start < SIZE * SIZE; start++) {
+    let taken = 0
+    let full = false
+    const rec = (wordIdx, cells) => {
       if (full) return
-      rec(wordIdx + 1, cells.map((v, i) => a.get(i) ?? v))
+      if (wordIdx === WORDS.length) {
+        const key = cells.map(x => x ?? '.').join('')
+        if (!seen.has(key)) {
+          seen.add(key)
+          if (++taken >= QUOTA) full = true
+        }
+        return
+      }
+      for (const a of placements(WORDS[wordIdx], cells, wordIdx === 0 ? start : null)) {
+        if (full) return
+        rec(wordIdx + 1, cells.map((v, i) => a.get(i) ?? v))
+      }
     }
+    rec(0, Array(SIZE * SIZE).fill(null))
   }
-  rec(0, Array(SIZE * SIZE).fill(null))
   return [...seen].map(key => key.split('').map(c => (c === '.' ? null : c)))
 }
 
@@ -98,6 +108,14 @@ const LETTER_WEIGHTS = [
   ['d', 3.7], ['c', 3.3], ['m', 3.0], ['p', 3.0], ['v', 1.6],
   ['g', 1.2], ['f', 1.1], ['b', 0.9], ['h', 0.7],
 ]
+// Les lettres rares (y, k, z…) sont absentes des poids ci-dessus : elles ne
+// produisent quasi aucun mot. Mais si le mot à cacher en contient une, elle est
+// UNIQUE dans la grille et sert d'ancre visuelle — le joueur repère le Y et
+// inspecte ses voisins. `EXTRA_LETTERS=y` autorise le tirage d'un leurre.
+for (const l of (process.env.EXTRA_LETTERS ?? '').toLowerCase().split(',').filter(Boolean)) {
+  const w = parseFloat(process.env.EXTRA_WEIGHT ?? '2.5')
+  LETTER_WEIGHTS.push([l.trim(), w])
+}
 const TOTAL_W = LETTER_WEIGHTS.reduce((a, [, w]) => a + w, 0)
 
 function mulberry32(seed) {
@@ -178,6 +196,99 @@ function gridToStr(g) {
   return rows.join('\n')
 }
 
+// ─── Furtivité (opt-in via STEALTH_WORD) ─────────────────────────────────────
+// Un mot placé peut être trivial à repérer (lettres groupées, chemin rectiligne,
+// dans le sens de lecture) ou au contraire se fondre dans la grille. Sur les
+// grilles anniversaire le mot perso est attendu par les joueurs : on veut qu'il
+// se mérite. On mesure la visibilité du chemin LE PLUS repérable (pire cas pour
+// nous) et on minimise cette valeur.
+const STEALTH_WORD = (process.env.STEALTH_WORD ?? '').toLowerCase().trim()
+const MIN_WORDS = parseInt(process.env.MIN_WORDS ?? '0', 10)
+const MIN_SCORE = parseInt(process.env.MIN_SCORE ?? '0', 10)
+const CORNERS = new Set([0, SIZE - 1, SIZE * (SIZE - 1), SIZE * SIZE - 1])
+
+function allWordPaths(grid, word) {
+  const paths = []
+  const visited = Array(SIZE * SIZE).fill(false)
+  const path = []
+  function dfs(i, cell) {
+    if (grid[cell] !== word[i]) return
+    path.push(cell); visited[cell] = true
+    if (i === word.length - 1) paths.push([...path])
+    else for (const nb of NEIGHBORS[cell]) if (!visited[nb]) dfs(i + 1, nb)
+    visited[cell] = false; path.pop()
+  }
+  for (let s = 0; s < SIZE * SIZE; s++) dfs(0, s)
+  return paths
+}
+
+// Visibilité d'un chemin : haut = saute aux yeux.
+function visibility(path) {
+  const rc = path.map(i => [Math.floor(i / SIZE), i % SIZE])
+  const steps = rc.length - 1
+  let turns = 0, run = 1, maxRun = 1, forward = 0, prev = null
+  for (let i = 1; i < rc.length; i++) {
+    const dr = rc[i][0] - rc[i - 1][0], dc = rc[i][1] - rc[i - 1][1]
+    // sens de lecture : vers la droite, ou vers le bas à colonne égale
+    if (dc > 0 || (dc === 0 && dr > 0)) forward++
+    if (prev && dr === prev[0] && dc === prev[1]) { run++; if (run > maxRun) maxRun = run }
+    else { if (prev) turns++; run = 1 }
+    prev = [dr, dc]
+  }
+  const rows = rc.map(x => x[0]), cols = rc.map(x => x[1])
+  const bbox = (Math.max(...rows) - Math.min(...rows) + 1) * (Math.max(...cols) - Math.min(...cols) + 1)
+  // Amorce : les 3 premières lettres pilotent la découverte. Si elles se lisent
+  // de gauche à droite sur une même ligne, le mot se donne tout seul.
+  let opener = 0
+  for (let i = 1; i <= Math.min(3, steps); i++) {
+    const dr = rc[i][0] - rc[i - 1][0], dc = rc[i][1] - rc[i - 1][1]
+    if (dr === 0 && dc === 1) opener += 2.0
+    else if (dc === 1) opener += 0.8
+  }
+  return 2.0 * (steps - 1 - turns)      // segments rectilignes
+       + 1.5 * (SIZE * SIZE - bbox) / 4 // lettres groupées = paquet repérable
+       + 2.0 * (forward / steps)        // suit le sens de lecture
+       + 1.5 * (maxRun / steps)         // plus longue ligne droite
+       + opener
+       + (CORNERS.has(path[0]) ? 2.0 : 0) // départ dans un coin = scanné en premier
+}
+
+// Lettres du mot présentes en surnombre = fausses pistes. Pondéré par la rareté :
+// un second Y vaut infiniment plus qu'un second E (le E est partout de toute façon).
+// ⚠ Rareté réelle en français, à ne PAS confondre avec LETTER_WEIGHTS qui pilote
+// la probabilité de TIRAGE : monter EXTRA_WEIGHT pour faire sortir un Y plus
+// souvent ne doit pas mécaniquement dévaluer ce Y comme leurre.
+const FREQ = new Map([
+  ...LETTER_WEIGHTS.filter(([l]) => !(process.env.EXTRA_LETTERS ?? '').includes(l)),
+  ['y', 0.3], ['k', 0.05], ['x', 0.4], ['z', 0.1], ['j', 0.5], ['q', 1.0], ['w', 0.05],
+])
+function decoyCount(grid, word) {
+  const need = new Map()
+  for (const ch of word) need.set(ch, (need.get(ch) ?? 0) + 1)
+  let extra = 0
+  for (const [ch, n] of need) {
+    const dup = Math.max(0, grid.filter(c => c === ch).length - n)
+    extra += dup * (8 / (FREQ.get(ch) ?? 0.5))
+  }
+  return extra
+}
+
+// Bas = furtif. Retourne null si le mot n'est pas traçable (ne devrait pas arriver).
+function stealthScore(grid, word) {
+  const paths = allWordPaths(grid, word)
+  if (paths.length === 0) return null
+  const worst = Math.max(...paths.map(visibility))
+  // Les leurres aident mais ne rachètent pas un chemin évident : plafond à 6.
+  const decoys = Math.min(decoyCount(grid, word), 6)
+  return {
+    value: worst - 0.5 * decoys + 0.3 * (paths.length - 1),
+    worst,
+    paths: paths.length,
+    decoys,
+    bestPath: paths[paths.map(visibility).indexOf(worst)],
+  }
+}
+
 async function main() {
   console.log(`\n=== Grille 4×4 avec ${WORDS.map(w => w.toUpperCase()).join(' + ')} ===\n`)
 
@@ -230,11 +341,18 @@ async function main() {
       const found = findAllWords(grid, trie)
       if (!hasCoverage(found)) continue
       const { score, byLen } = scoreWords(found)
-      if (top.length < TOP_K || score > top[top.length - 1].score) {
+      // Plancher de qualité : en mode furtif on trie sur autre chose que le score
+      // dico, donc il faut garantir que la grille reste riche.
+      if (found.size < MIN_WORDS || score < MIN_SCORE) continue
+      const stealth = STEALTH_WORD ? stealthScore(grid, STEALTH_WORD) : null
+      if (STEALTH_WORD && !stealth) continue
+      // rank : plus haut = meilleur. Furtif = on minimise la visibilité.
+      const rank = stealth ? -stealth.value : score
+      if (top.length < TOP_K || rank > top[top.length - 1].rank) {
         const key = grid.join('')
         if (top.some(t => t.key === key)) continue
-        top.push({ key, grid, score, byLen, totalWords: found.size, found })
-        top.sort((a, b) => b.score - a.score)
+        top.push({ key, grid, rank, score, byLen, totalWords: found.size, found, stealth })
+        top.sort((a, b) => b.rank - a.rank)
         if (top.length > TOP_K) top.pop()
       }
     }
@@ -248,8 +366,15 @@ async function main() {
 
   top.forEach((g, idx) => {
     const longWords = [...g.found].filter(w => w.length >= 6).sort((a, b) => b.length - a.length || a.localeCompare(b))
-    console.log(`─── #${idx + 1} · score ${g.score.toFixed(0)} · ${g.totalWords} mots ───`)
+    const st = g.stealth
+      ? ` · furtivité ${(-g.rank).toFixed(2)} (visib ${g.stealth.worst.toFixed(1)}, ${g.stealth.paths} chemin(s), ${g.stealth.decoys} leurres)`
+      : ''
+    console.log(`─── #${idx + 1} · score ${g.score.toFixed(0)} · ${g.totalWords} mots${st} ───`)
     console.log(gridToStr(g.grid))
+    if (g.stealth) {
+      const p = g.stealth.bestPath.map(i => `${String.fromCharCode(65 + (i % SIZE))}${Math.floor(i / SIZE) + 1}`)
+      console.log(`Chemin ${STEALTH_WORD.toUpperCase()} le + repérable : ${p.join('→')}`)
+    }
     console.log(`Distribution : ${Object.entries(g.byLen).map(([L, n]) => `${L}L=${n}`).join('  ')}`)
     console.log(`Mots 6L+ (${longWords.length}) : ${longWords.slice(0, 25).join(', ')}${longWords.length > 25 ? '…' : ''}`)
     console.log()

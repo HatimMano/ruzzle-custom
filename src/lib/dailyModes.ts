@@ -620,6 +620,87 @@ export const hatimBirthdayMode: DailyModeRules = {
   },
 }
 
+// ─── Mode anniversaire Ay (4×4 grille fixe avec AYMADEIT + ATELIER + ARTISTE) ─
+
+const AY_BIRTHDAY_DATE = '2026-08-01'
+
+// Grille déterministe (scripts/optimize-birthday-taha.mjs en mode STEALTH_WORD)
+// garantissant AYMADEIT (8L, mot bonus) + ATELIER + ARTISTE + 448 mots dont 4 de
+// 8L et 1 de 9L (deratisat). Chaque mot imposé n'a qu'UN seul chemin.
+//
+// Contrairement aux grilles anniversaire précédentes, celle-ci est optimisée pour
+// que le mot perso soit DIFFICILE à repérer : le tracé part du centre (C2) et
+// traverse toute la grille, et « M Y » se lit de gauche à droite en première ligne
+// alors que le M est la 3e lettre — le joueur qui accroche le Y part du mauvais côté.
+//   M Y S P      ordre AYMADEIT :  3 2 . .
+//   A S A T                        4 . 1 8
+//   T D I R                        . 5 7 .
+//   E L E S                        . . 6 .
+const AY_GRID_LETTERS: string[][] = [
+  ['m', 'y', 's', 'p'],
+  ['a', 's', 'a', 't'],
+  ['t', 'd', 'i', 'r'],
+  ['e', 'l', 'e', 's'],
+]
+
+export const AY_BONUS_WORDS = ['aymadeit']
+
+function generateAyBirthdayGrid(
+  _seed: string,
+  trie: Trie
+): { grid: Grid; validWords: Set<string> } {
+  addBonusWords(AY_BONUS_WORDS)
+  const grid: Grid = AY_GRID_LETTERS.map((row, r) =>
+    row.map((letter, c) => ({ letter, row: r, col: c }))
+  )
+  const validWords = findAllWords(grid, trie, 3, 10)
+  return { grid, validWords }
+}
+
+export const ayBirthdayMode: DailyModeRules = {
+  kind: 'pyramid',
+  id: 'birthday-ay-2026-08-01',
+  name: 'Happy 29 Ay',
+  subtitle: 'Joyeux anniversaire 🎂',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(16,185,129,0.32) 0%, rgba(45,212,191,0.2) 50%, rgba(132,204,22,0.2) 100%)',
+    cardBorder: '1px solid rgba(16,185,129,0.5)',
+    cardShadow: '0 0 32px rgba(16,185,129,0.22)',
+    accent: '#34d399',
+    accentSoft: 'rgba(52,211,153,0.75)',
+    slotBg: 'rgba(16,185,129,0.14)',
+    slotBorder: '1px solid rgba(16,185,129,0.3)',
+    buttonBg: 'rgba(5,150,105,0.55)',
+    buttonBorder: '1px solid rgba(5,150,105,0.35)',
+  },
+  intro: {
+    title: 'Happy 29 Ay',
+    tagline: 'Une grille rien que pour toi',
+    // Pas de puces : le mot cadeau ne doit pas être annoncé, la grille est
+    // justement optimisée pour qu'il se mérite (cf. ADR 2026-07-30).
+    bullets: [],
+    cta: 'Joyeux anniversaire 🎉',
+  },
+  generate(seed, trie) {
+    return generateAyBirthdayGrid(seed, trie)
+  },
+}
+
+// Âge fêté par mode anniversaire. Source unique consommée par HomeScreen (chiffres
+// flottants, confettis, 🎂) et DailyResultsScreen (overlay « Happy N ») — avant, chacun
+// tenait sa propre chaîne de ternaires et elles avaient déjà divergé.
+// Ajouter un anniversaire = 1 mode + 1 ligne ici.
+export const BIRTHDAY_AGE: Record<string, string> = {
+  'birthday-2026-04-30': '60',
+  'birthday-fate-2026-06-30': '59',
+  'birthday-taha-2026-07-10': '31',
+  'birthday-hatim-2026-07-11': '30',
+  'birthday-ay-2026-08-01': '29',
+}
+
 // ─── Triddle : 3 grilles d'affilée ────────────────────────────────────────────
 
 export const triddleMode: TriddleMode = {
@@ -788,6 +869,7 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [FATE_BIRTHDAY_DATE]: fateBirthdayMode,
   [TAHA_BIRTHDAY_DATE]: tahaBirthdayMode,
   [HATIM_BIRTHDAY_DATE]: hatimBirthdayMode,
+  [AY_BIRTHDAY_DATE]: ayBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
   '2026-05-17': triddleMode,
 }

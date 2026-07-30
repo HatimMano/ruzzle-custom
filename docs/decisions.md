@@ -15,6 +15,71 @@ Format type :
 
 ---
 
+## 2026-07-30 — Anniversaire Ay : critère de furtivité dans le solveur de grille
+
+**Trigger** : anniversaire d'Aymane le samedi 01/08 (29 ans). Demande explicite : le mot
+perso `AYMADEIT` doit être **attendu mais pas évident**. Les 4 grilles anniversaire
+précédentes optimisaient uniquement la richesse du dictionnaire — le mot thématique
+tombait où il tombait, souvent en bloc compact dans un coin, repérable en une seconde.
+
+**Options envisagées** :
+- a) Choisir à la main parmi le top-5 du solveur existant — aucune des 5 n'était furtive,
+  et pour cause (cf. le bug ci-dessous).
+- b) **Ajouter un critère de furtivité opt-in au solveur générique** et trier dessus.
+- c) Grille dessinée à la main — infaisable avec 3 mots imposés et une pyramide à couvrir.
+
+**Choix** : b), via `STEALTH_WORD=<mot>` sur `scripts/optimize-birthday-taha.mjs`.
+Grille retenue (448 mots dico + `aymadeit` bonus, pyramide 3→8 complète) :
+```
+M Y S P     ordre AYMADEIT :  3 2 . .
+A S A T                       4 . 1 8
+T D I R                       . 5 7 .
+E L E S                       . . 6 .
+```
+
+**Bug de fond découvert au passage (le vrai apport de la session)** : `collectSolutions`
+plafonnait à `MAX_SOLUTIONS = 200 000` placements, et le DFS place le premier mot en
+partant de la case 0. Le plafond était atteint **avant** que la recherche n'ait quitté le
+coin haut-gauche → 100 % des solutions candidates avaient le mot qui démarre en A1. Le
+solveur n'explorait qu'un seizième de l'espace, en silence, depuis la grille Fate.
+Corrigé par un **quota par case de départ** (`MAX_SOLUTIONS / 16`). Les grilles Fate,
+Taha et Hatim ont donc été choisies dans un espace tronqué — sans conséquence (elles sont
+figées en dur et jouées), mais l'explication du « toutes les propositions se ressemblent ».
+
+**Comment se mesure la furtivité** : on énumère TOUS les chemins traçant le mot, on note
+la visibilité de chacun et on garde **le pire cas** (le chemin le plus repérable est celui
+qu'un joueur trouvera). Composantes : segments rectilignes, compacité de la bounding box,
+respect du sens de lecture, amorce (les 3 premières lettres qui se lisent de gauche à
+droite = le mot se donne tout seul), départ dans un coin. Bonus de discrétion pour les
+lettres du mot présentes en surnombre (fausses pistes), pondéré par la **rareté réelle** en
+français — volontairement découplé de `LETTER_WEIGHTS` qui pilote la probabilité de
+tirage, sinon rendre le Y plus fréquent le dévaluerait mécaniquement comme leurre.
+
+**Pourquoi cette grille** : le tracé part du **centre** (C2), monte à gauche, redescend en
+diagonale jusqu'en bas puis remonte à droite — il traverse toute la grille. Et `M Y` se lit
+de gauche à droite en première ligne alors que le M est la **3ᵉ** lettre : le joueur qui
+accroche le Y (lettre rare, ancre visuelle naturelle) part du mauvais côté.
+
+**Refacto au passage** : `BIRTHDAY_AGE` dans `dailyModes.ts` remplace deux chaînes de
+ternaires par `mode.id` (HomeScreen + DailyResultsScreen) qui avaient déjà divergé —
+l'overlay « Happy N » ne se déclenchait que sur 2 des 4 anniversaires. Ajouter un
+anniversaire = 1 mode + 1 ligne.
+
+**Tradeoffs assumés** :
+- 448 mots contre 513 pour la meilleure grille non-furtive : dictionnaire un peu moins
+  riche, dans la norme des grilles anniversaire précédentes (Taha 297, Hatim 423).
+- Pas de Y leurre : en forcer un fait chuter le dico sous 400 mots (le Y ne produit
+  presque rien en français). Arbitré en faveur de la qualité de jeu pour tout le monde.
+
+**À surveiller** :
+- Sync `_shared/dailyModes.ts` + `MODE_BONUS_WORDS` + **redéploiement de l'Edge Function
+  AVANT le 01/08**, sinon toutes les soumissions du jour sont rejetées en silence.
+- Le mode a été vérifié en exécutant le vrai code serveur : `modeForDate('2026-08-01')`,
+  grille identique côté client/serveur, `aymadeit` accepté, pyramide complétable, 02/08
+  toujours Ruddle.
+
+---
+
 ## 2026-07-25 — Ruddle en rotation + fin de l'insert direct (tous modes via edge function)
 
 **Trigger** : demande d'ajouter Ruddle au cycle dominical (premier passage 02/08). Or Ruddle utilisait encore l'insert direct client, chemin prouvé cassé par l'incident Speedle du 12/07.

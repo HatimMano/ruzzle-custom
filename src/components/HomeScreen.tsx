@@ -7,6 +7,7 @@ import {
   levelLabel,
   isRuddleMode,
   isSpeedleMode,
+  BIRTHDAY_AGE,
   type DailyMode,
 } from "../lib/dailyModes";
 import { speedleSecsBonus } from "../lib/speedleScoring";
@@ -130,11 +131,7 @@ export default function HomeScreen({
   };
 
   const { cardBg, cardBorder, cardShadow, accent, accentSoft, slotBg, slotBorder, buttonBg, buttonBorder } = todayMode.palette;
-  const isBirthday = todayMode.id === "birthday-2026-04-30";
-  const isFateBirthday = todayMode.id === "birthday-fate-2026-06-30";
-  const isTahaBirthday = todayMode.id === "birthday-taha-2026-07-10";
-  const isHatimBirthday = todayMode.id === "birthday-hatim-2026-07-11";
-  const birthdayNumber = isBirthday ? "60" : isFateBirthday ? "59" : isTahaBirthday ? "31" : isHatimBirthday ? "30" : null;
+  const birthdayNumber = BIRTHDAY_AGE[todayMode.id] ?? null;
   const floatingNumbers = birthdayNumber
     ? Array.from({ length: 14 }, (_, i) => ({
         top: (i * 37 + 13) % 90,
@@ -348,7 +345,7 @@ export default function HomeScreen({
                   {birthdayNumber}
                 </span>
               ))}
-              {isHatimBirthday && <ConfettiCanvas count={18} />}
+              {birthdayNumber && <ConfettiCanvas count={18} />}
               <div style={{ padding: "1.25rem 1.25rem 1rem", position: "relative" }}>
                 <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
                   {todayMode.name.toUpperCase()}
@@ -362,7 +359,7 @@ export default function HomeScreen({
                   display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap",
                   fontSize: "0.7rem", fontWeight: 600, color: accentSoft, opacity: 0.85,
                 }}>
-                  <span>{isHatimBirthday ? "🎂" : "🏆"}</span>
+                  <span>{birthdayNumber ? "🎂" : "🏆"}</span>
                   <span>Record du jour</span>
                   {modeRecordLoading ? (
                     <span style={{

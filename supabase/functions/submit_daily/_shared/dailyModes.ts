@@ -200,6 +200,31 @@ export const classicMode: PyramidMode = {
   },
 }
 
+// Spinddle : mêmes règles et même génération que Pyramiddle. La bascule du
+// plateau est purement visuelle côté client — les 8 symétries du carré préservent
+// l'adjacence, donc l'ensemble des mots valides est identique et le serveur n'a
+// rien à savoir de l'orientation affichée au joueur.
+export const spinddleMode: PyramidMode = {
+  kind: 'pyramid',
+  id: 'spinddle',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  minWordsAtCap: 2,
+  maxWordsAtCap: 5,
+  generate(seed, trie) {
+    return generatePyramidGrid(
+      effectiveSeed(seed),
+      trie,
+      this.size,
+      this.maxWordLen,
+      this.pyramidLengths,
+      this.minWordsAtCap ?? 1,
+      this.maxWordsAtCap
+    )
+  },
+}
+
 export const bigriddleMode: PyramidMode = {
   kind: 'pyramid',
   id: 'bigriddle',
@@ -560,7 +585,9 @@ function isSunday(date: string): boolean {
 // Cycle 4 semaines depuis le 2026-07-26 : Triddle (marathonMode) → Ruddle →
 // Speedle → BiGriddle. DOIT rester en sync avec src/lib/dailyModes.ts côté client.
 const SUNDAY_REF = new Date('2026-07-26T00:00:00Z')
-const SUNDAY_CYCLE: readonly DailyMode[] = [marathonMode, ruddleMode, speedleMode, bigriddleMode]
+// ⚠ Spinddle ajouté en FIN de tableau (31/07) : cycle à 5 semaines sans décaler
+// les dimanches déjà calés. Doit rester synchrone avec le client.
+const SUNDAY_CYCLE: readonly DailyMode[] = [marathonMode, ruddleMode, speedleMode, bigriddleMode, spinddleMode]
 function sundayMode(date: string): DailyMode {
   const d = new Date(`${date}T00:00:00Z`)
   const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))

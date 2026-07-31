@@ -208,6 +208,8 @@ export default function PlayingScreen({
               onWordSubmit={onWordSubmit}
               disabled={false}
               minLetters={isDailyChallenge ? 3 : config.minLetters}
+              spin={dailyMode?.kind === "pyramid" ? dailyMode.spin : undefined}
+              spinSeed={seed}
             />
           )}
           {scoreAnim && (

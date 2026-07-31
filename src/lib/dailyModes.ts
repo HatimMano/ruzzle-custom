@@ -27,12 +27,28 @@ export interface DailyModeIntro {
   cta: string
 }
 
+// Emblème du mode, rendu par <ModeEmblem>. Champ OBLIGATOIRE : chaque mode doit
+// être identifiable d'un coup d'œil sur l'accueil, un nouveau mode ne doit pas
+// pouvoir passer sans le sien (le compilateur s'en charge).
+export type EmblemId = 'pyramid' | 'bigpyramid' | 'triple' | 'bolt' | 'hourglass' | 'spin' | 'cake'
+
 interface DailyModeBase {
   readonly id: string
   readonly name: string
   readonly subtitle: string
+  readonly emblem: EmblemId
   readonly palette: DailyModePalette
   readonly intro?: DailyModeIntro
+}
+
+// Bascule périodique du plateau (Spinddle). Les 8 symétries du carré préservent
+// l'adjacence roi, donc l'ensemble des mots trouvables est RIGOUREUSEMENT identique
+// quelle que soit l'orientation affichée (vérifié sur 4 grilles × 8 transformations).
+// Conséquence : c'est du pur cosmétique client — le serveur valide sur la grille
+// canonique et n'a jamais besoin de connaître l'orientation vue par le joueur.
+export interface SpinConfig {
+  readonly everySecs: number
+  readonly transforms: 'rotations' | 'mirrors' | 'all'
 }
 
 export interface PyramidMode extends DailyModeBase {
@@ -40,6 +56,7 @@ export interface PyramidMode extends DailyModeBase {
   readonly size: number
   readonly maxWordLen: number
   readonly pyramidLengths: readonly number[]
+  readonly spin?: SpinConfig
   // Nombre minimum de mots requis au niveau plafond (le dernier de pyramidLengths,
   // qui agit comme "≥"). Permet de garantir des alternatives au mot le plus long.
   readonly minWordsAtCap?: number
@@ -298,6 +315,7 @@ export const classicMode: DailyModeRules = {
   id: 'classic',
   name: 'Pyramiddle',
   subtitle: 'Défi du jour · complète la pyramide',
+  emblem: 'pyramid',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -332,6 +350,7 @@ export const bigriddleMode: DailyModeRules = {
   id: 'bigriddle',
   name: 'BiGriddle',
   subtitle: 'Pyramide étendue · 5×5 · jusqu\'à 10 lettres',
+  emblem: 'bigpyramid',
   size: 5,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8, 9, 10],
@@ -428,6 +447,7 @@ export const birthdayMode: DailyModeRules = {
   id: 'birthday-2026-04-30',
   name: 'Happy 60',
   subtitle: 'Édition spéciale · complète la pyramide',
+  emblem: 'cake',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -480,6 +500,7 @@ export const fateBirthdayMode: DailyModeRules = {
   id: 'birthday-fate-2026-06-30',
   name: 'Happy 59 Fate',
   subtitle: 'Joyeux anniversaire 🎂',
+  emblem: 'cake',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -536,6 +557,7 @@ export const tahaBirthdayMode: DailyModeRules = {
   id: 'birthday-taha-2026-07-10',
   name: 'Happy 31 Taha M',
   subtitle: 'Joyeux anniversaire 🎂',
+  emblem: 'cake',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -592,6 +614,7 @@ export const hatimBirthdayMode: DailyModeRules = {
   id: 'birthday-hatim-2026-07-11',
   name: 'Happy 30 Mano',
   subtitle: 'Le début d\'autre chose 🎂',
+  emblem: 'cake',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -662,6 +685,7 @@ export const ayBirthdayMode: DailyModeRules = {
   id: 'birthday-ay-2026-08-01',
   name: 'Happy 29 Ay',
   subtitle: 'Joyeux anniversaire 🎂',
+  emblem: 'cake',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7, 8],
@@ -701,6 +725,62 @@ export const BIRTHDAY_AGE: Record<string, string> = {
   'birthday-ay-2026-08-01': '29',
 }
 
+// ─── Spinddle : Pyramiddle dont le plateau bascule ────────────────────────────
+// Même grille, mêmes mots, mais toutes les 15 s le plateau prend une autre
+// orientation : on perd ses repères, pas ses possibilités. Pas de chrono — le
+// classement du jour départage déjà à `elapsed_secs`, et comme la plupart des
+// joueurs complètent la pyramide, chaque bascule mal encaissée se paie au rang.
+
+export const spinddleMode: DailyModeRules = {
+  kind: 'pyramid',
+  id: 'spinddle',
+  name: 'Spinddle',
+  subtitle: 'Le plateau bascule · mêmes mots',
+  emblem: 'spin',
+  size: 4,
+  maxWordLen: 10,
+  pyramidLengths: [3, 4, 5, 6, 7, 8],
+  minWordsAtCap: 2,
+  maxWordsAtCap: 5,
+  spin: { everySecs: 15, transforms: 'all' },
+  // Rose : seule famille libre parmi les 5 modes permanents (ambre Pyramiddle,
+  // orange Triddle, bleu Ruddle, émeraude Speedle, violet BiGriddle). Le violet
+  // initial était trop proche du BiGriddle.
+  palette: {
+    cardBg: 'linear-gradient(135deg, rgba(251,113,133,0.32) 0%, rgba(244,63,94,0.2) 50%, rgba(217,70,239,0.18) 100%)',
+    cardBorder: '1px solid rgba(251,113,133,0.5)',
+    cardShadow: '0 0 32px rgba(251,113,133,0.22)',
+    accent: '#fb7185',
+    accentSoft: 'rgba(251,113,133,0.75)',
+    slotBg: 'rgba(251,113,133,0.14)',
+    slotBorder: '1px solid rgba(251,113,133,0.3)',
+    buttonBg: 'rgba(225,29,72,0.55)',
+    buttonBorder: '1px solid rgba(225,29,72,0.35)',
+  },
+  intro: {
+    title: 'Spinddle',
+    tagline: 'Garde le nord',
+    bullets: [
+      'Toutes les 15 secondes, le plateau bascule.',
+      'Rotation ou miroir — les lettres, elles, restent lisibles.',
+      'Les mots trouvables sont exactement les mêmes : seuls tes repères sautent.',
+      'Pas de chrono, mais le temps départage au classement.',
+    ],
+    cta: 'Go !',
+  },
+  generate(seed, trie) {
+    return generatePyramidGrid(
+      effectiveSeed(seed),
+      trie,
+      this.size,
+      this.maxWordLen,
+      this.pyramidLengths,
+      this.minWordsAtCap ?? 1,
+      this.maxWordsAtCap
+    )
+  },
+}
+
 // ─── Triddle : 3 grilles d'affilée ────────────────────────────────────────────
 
 export const triddleMode: TriddleMode = {
@@ -711,6 +791,7 @@ export const triddleMode: TriddleMode = {
   id: 'marathon',
   name: 'Triddle',
   subtitle: '3 grilles · 5 min chacune · pyramide 3→7',
+  emblem: 'triple',
   size: 4,
   maxWordLen: 10,
   pyramidLengths: [3, 4, 5, 6, 7],
@@ -764,6 +845,7 @@ export const ruddleMode: RuddleMode = {
   id: 'ruddle',
   name: 'Ruddle',
   subtitle: 'Défi du jour · 2 minutes · le plus de mots',
+  emblem: 'bolt',
   size: 4,
   durationSecs: 120,
   minWordLen: 3,
@@ -832,6 +914,7 @@ export const speedleMode: SpeedleMode = {
   id: 'speedle',
   name: 'Speedle',
   subtitle: 'Défi du jour · résiste le plus longtemps',
+  emblem: 'hourglass',
   size: 4,
   startSecs: 45,
   minWordLen: 3,
@@ -888,8 +971,11 @@ function isSunday(date: string): boolean { return utcDay(date) === 0 }
 // reflète plus l'historique réel (05/07 était Triddle) — sans impact : rien ne
 // résout de mode pour une date passée.
 // Modulo positif pour supporter les dates avant SUNDAY_REF.
+// ⚠ Spinddle ajouté EN FIN de tableau (2026-07-31) : le cycle passe à 5 semaines
+// sans décaler les dimanches déjà calés (02/08 Ruddle, 09/08 Speedle, 16/08
+// BiGriddle). L'insérer ailleurs les décalerait tous. Premier Spinddle : 23/08.
 const SUNDAY_REF = new Date('2026-07-26T00:00:00Z')
-const SUNDAY_CYCLE: readonly DailyMode[] = [triddleMode, ruddleMode, speedleMode, bigriddleMode]
+const SUNDAY_CYCLE: readonly DailyMode[] = [triddleMode, ruddleMode, speedleMode, bigriddleMode, spinddleMode]
 function sundayMode(date: string): DailyMode {
   const d = new Date(`${date}T00:00:00Z`)
   const weekOffset = Math.round((d.getTime() - SUNDAY_REF.getTime()) / (7 * 86400000))
@@ -903,6 +989,7 @@ export function modeForDate(date: string, override?: string | null): DailyMode {
   if (override === 'classic') return classicMode
   if (override === 'ruddle' || override === 'eclair') return ruddleMode
   if (override === 'speedle' || override === 'infini') return speedleMode
+  if (override === 'spinddle') return spinddleMode
   const special = SPECIAL_DATES[date]
   if (special) return special
   if (isSunday(date)) return sundayMode(date)

@@ -15,6 +15,85 @@ Format type :
 
 ---
 
+## 2026-07-31 — Spinddle : le plateau bascule, les mots ne bougent pas
+
+**Trigger** : envie d'un mode où la grille se réoriente en cours de partie. Première
+piste explorée : une grille **torique** (sortir à gauche revient à droite). Abandonnée
+après prototype — cf. « Piste écartée » plus bas.
+
+**Le fait qui fonde le mode** : les 8 symétries du carré (4 rotations + 4 miroirs)
+préservent l'adjacence roi. L'ensemble des mots trouvables est donc **rigoureusement
+identique** dans les 8 orientations — vérifié sur les 4 grilles anniversaire × 8
+transformations, 448/508/423/297 mots inchangés à chaque fois, avec 10 à 16 lettres
+sur 16 qui changent de place. On retire au joueur ses repères, jamais ses possibilités.
+
+**Options envisagées** :
+- a) Base **chrono 2 min** (façon Ruddle) : la bascule coûte des secondes de jeu.
+- b) Base **pyramide illimitée** (façon Pyramiddle).
+- c) Nouveau `kind` dédié.
+
+**Choix** : b), avec `kind: 'pyramid'` réutilisé tel quel.
+
+**Pourquoi** : « illimité » n'est pas sans horloge — `elapsed_secs` départage déjà le
+classement du jour, et **la plupart des joueurs complètent la pyramide** (confirmé par
+Hatim). Le classement est donc de fait une course au temps : chaque bascule mal encaissée
+se paie au rang, sans qu'on ait besoin d'un chrono. Le chrono aurait en plus fait doublon
+avec Ruddle, déjà dans le cycle dominical. Enfin, un mode à base pyramide se contente
+d'un `spin?: SpinConfig` sur `PyramidMode` — aucun nouveau moteur, aucun `if` par mode.
+
+**Implémentation — le point à retenir** : le DOM ne bouge pas. Seule une transform CSS
+oriente le plateau, avec une contre-transform (`T⁻¹ = S·R(−θ)`) sur le contenu des cases
+pour que les lettres restent droites. `data-row`/`data-col`, l'adjacence, le tracé et la
+validation ignorent totalement l'orientation — **et le serveur aussi** : il valide sur la
+grille canonique et n'a jamais besoin de savoir ce que le joueur voit. C'est la propriété
+qui rend le mode quasi gratuit et impossible à casser côté anti-triche.
+
+**Bascule en plein tracé — le mot est conservé** : le prototype différait la bascule tant
+que le doigt était posé ; arbitré dans l'autre sens à l'usage. Elle a lieu quoi qu'il
+arrive, **sans perdre le mot en cours** : la sélection est mémorisée par identité de case,
+pas par position à l'écran, donc elle survit gratuitement à la rotation — le joueur se
+réoriente et finit son mot. Seule précaution : la saisie est verrouillée pendant les 550 ms
+d'animation, sinon une case adjacente qui défile sous un doigt immobile s'ajoute toute
+seule au mot.
+
+**Tradeoffs assumés** :
+- **15 s** et non 10 : une partie Pyramiddle dure 5 à 10 min, à 10 s ça ferait 30 à 60
+  bascules — d'excitant à pénible.
+- 550 ms d'input verrouillé à chaque bascule. Assumé : c'est le prix de l'absence de
+  lettres parasites, et ça reste une fraction du temps de partie.
+- Ce qui a été validé au prototype, c'est la **version chrono**. La sensation sans horloge
+  sera plus posée. À réévaluer après le premier vrai dimanche.
+- On ne sait pas encore si la désorientation gênera réellement : en Boggle on rescanne en
+  permanence, on mémorise peu de positions. Le premier 23/08 le dira.
+
+**Piste écartée — la grille torique** : mesurée avant de coder. Sur un tore chaque case a
+8 voisins, le dico explose (×2,5 à ×4 : 448 → 1804 mots sur la grille Ay), ce qui obligeait
+à monter la pyramide jusqu'à 10L. Surtout, tracer un mot au doigt imposait d'afficher un
+halo de copies (rendu 6×6 pour une grille 4×4) **et** de rendre ce cadre déplaçable, les
+copies se répétant tous les 4. Verdict après prototype jouable : trop gros à l'écran
+(5×5 est le maximum tenable), et on perd la lisibilité — l'anneau ne se lit pas comme le
+reste de la grille. Les mesures restent valables si le sujet revient.
+
+**Identité visuelle — une couleur et un emblème par mode** : profité de l'ajout pour poser
+la règle. Spinddle a d'abord été peint en violet `#a78bfa`, trop proche du violet BiGriddle
+`#c084fc` — corrigé en rose `#fb7185`, seule famille libre parmi les 5 modes permanents.
+Et `emblem: EmblemId` devient un champ **obligatoire** de `DailyModeBase` (rendu par
+`ModeEmblem` à partir d'icônes lucide-react, déjà une dépendance) : un nouveau mode ne
+compile pas sans le sien, plutôt qu'un champ optionnel qu'on oublie. L'emblème Spinddle
+tourne en continu sur l'accueil — il annonce la règle avant même de lancer la partie.
+
+**À surveiller** :
+- Ambre Pyramiddle et orange Triddle restent voisins : à retravailler si un 7e mode arrive.
+- `SUNDAY_CYCLE` passe à **5 semaines**. Spinddle ajouté **en fin de tableau** pour ne pas
+  décaler les dimanches déjà calés (02/08 Ruddle, 09/08 Speedle, 16/08 BiGriddle) —
+  vérifié client ET serveur. Tout futur mode dominical doit suivre la même règle.
+- Le calque de contenu des cases **doit** garder `pointer-events-none`, sinon
+  `elementFromPoint` tombe dessus et le tracé au doigt casse silencieusement.
+- Sync `_shared/dailyModes.ts` + redéploiement de l'Edge Function, sans quoi le 23/08
+  renverra `mode_mismatch` sur toutes les soumissions.
+
+---
+
 ## 2026-07-30 — Anniversaire Ay : critère de furtivité dans le solveur de grille
 
 **Trigger** : anniversaire d'Aymane le samedi 01/08 (29 ans). Demande explicite : le mot

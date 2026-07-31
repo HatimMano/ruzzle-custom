@@ -72,13 +72,14 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 | Triddle | `marathon` (compat DB) | `triddle` | 3 grilles 4×4 pyramide 3→7, dimanche |
 | Ruddle | `ruddle` | `ruddle` | 2 min chrono, max de mots (ex-Blitz/Éclair) |
 | Speedle | `speedle` | `speedle` | Sablier 45s, +Ns par mot (ex-Sablier/Infini) |
+| Spinddle | `spinddle` | `pyramid` | Pyramiddle dont le plateau bascule toutes les 15s, dimanche |
 
 ⚠ Triddle a `mode.id='marathon'` conservé pour compat DB (résultats existants du test 2026-05-17 + edge function accepte 'marathon'). Le nom code est Triddle partout (types, fichiers, adapter). Voir commentaire dans [`dailyModes.ts`](src/lib/dailyModes.ts).
 
 **Calendrier hebdo** :
 - Lundi–Samedi = Pyramiddle (sauf dates spéciales `SPECIAL_DATES` : anniversaires avec grilles fixes — `birthday-2026-04-30` Happy 60, `birthday-fate-2026-06-30`, `birthday-taha-2026-07-10`, `birthday-hatim-2026-07-11` Happy 30 Mano, `birthday-ay-2026-08-01` Happy 29 Ay). L'âge fêté vit dans `BIRTHDAY_AGE` ([dailyModes.ts](src/lib/dailyModes.ts)), consommé par HomeScreen (chiffres flottants, confettis, 🎂) et DailyResultsScreen (overlay « Happy N ») — **ajouter un anniversaire = 1 mode + 1 ligne**, ne pas réintroduire de chaîne de ternaires par `mode.id` dans les composants.
-- Dimanche = **cycle 4 semaines** depuis `SUNDAY_REF = 2026-07-26` : Triddle → Ruddle → Speedle → BiGriddle (premier Ruddle dominical : 02/08/2026). ⚠ `modeForDate` sur les dimanches AVANT le 26/07 ne reflète plus l'historique réel (documenté dans le code, sans impact).
-- Overrides `?mode=<id>` : `ruddle`, `speedle`, `triddle`, `bigriddle`, `classic`. Aliases historiques `eclair` (→ruddle), `infini` (→speedle), `marathon` (→triddle) conservés. Preview d'un jour futur : `?daily=YYYY-MM-DD`.
+- Dimanche = **cycle 5 semaines** depuis `SUNDAY_REF = 2026-07-26` : Triddle → Ruddle → Speedle → BiGriddle → **Spinddle** (premier Spinddle : 23/08/2026). ⚠ **Tout nouveau mode dominical doit être ajouté EN FIN de `SUNDAY_CYCLE`** — l'insérer ailleurs décale tous les dimanches déjà calés. ⚠ `modeForDate` sur les dimanches AVANT le 26/07 ne reflète plus l'historique réel (documenté dans le code, sans impact).
+- Overrides `?mode=<id>` : `ruddle`, `speedle`, `triddle`, `bigriddle`, `classic`, `spinddle`. Aliases historiques `eclair` (→ruddle), `infini` (→speedle), `marathon` (→triddle) conservés. Preview d'un jour futur : `?daily=YYYY-MM-DD`.
 - `SEED_OVERRIDES` (client + serveur) : permet de remplacer la grille d'une date (ex : `2026-07-12` → `-v2` lors du reset Speedle). À utiliser pour tout reset de défi en cours de journée — coupler avec `HIDE_WORDS_DATES` dans [`LeaderboardDrawer.tsx`](src/components/LeaderboardDrawer.tsx) (masque l'onglet Mots du jour pour que les "déjà soumis" du matin ne spoilent pas la nouvelle grille).
 - **Mots bonus hors dico** (ex : `donkey`, `dreamtim` pour les anniversaires) : `addBonusWords` client ([`dictionary.ts`](src/lib/dictionary.ts)) + `MODE_BONUS_WORDS` serveur (injectés dans wordSet/trie avant validation).
 
@@ -91,6 +92,19 @@ Architecture en union discriminée `DailyMode = PyramidMode | TriddleMode | Rudd
 **Scoring Speedle** : score composite 3 tiers `survivedSecs × 1_000_000 + wordCount × 100 + maxWordLen`. Ordre de tri : survie > nb mots > mot le plus long. **Le composite ne doit JAMAIS être affiché brut** — afficher `elapsed_secs` (survie) + `levels_found` (mots), cf. `speedleLeaderboardLabel` et le cas `isSpeedleEntry` du drawer. Bonus temps par mot : `3=1, 4=2, 5=4, 6=5, 7=7, 8+=10` dans [`speedleScoring.ts`](src/lib/speedleScoring.ts) (courbe aplatie le 11/07, 8L+ relevé à +10 car la grille garantit la rareté). Barème dupliqué serveur dans `_shared/dailyModes.ts` — à modifier ensemble. **Grille Speedle contrainte** : `generateSpeedleGrid` exige ≥100 mots et **2-5 mots de 8L+** (vérifiable via [`scripts/check-speedle-grid.mjs`](scripts/check-speedle-grid.mjs) pour les dimanches à venir).
 
 **Scoring Ruddle** : `scoreForWord` standard (`3=1, 4=1, 5=2, 6=4, 7=7, 8+=12`) cumulé sur 2 min.
+
+**Spinddle — la bascule est 100% cosmétique côté client.** Les 8 symétries du carré (4 rotations + 4 miroirs) préservent l'adjacence roi : l'ensemble des mots trouvables est **rigoureusement identique** dans les 8 orientations (vérifié sur 4 grilles). Conséquences à ne pas perdre de vue :
+- Le **DOM ne bouge pas** — seule une transform CSS oriente le plateau dans [`Grid.tsx`](src/components/Grid.tsx). `data-row`/`data-col`, l'adjacence, le tracé et la validation ignorent l'orientation. Le mode réutilise `kind: 'pyramid'` sans un seul `if` par mode ailleurs dans le code.
+- Le **serveur n'a rien à savoir de l'orientation** : il valide sur la grille canonique. `_shared/dailyModes.ts` déclare `spinddleMode` uniquement pour que `modeForDate` résolve le bon id — pas de logique de bascule côté serveur.
+- **Contre-transform obligatoire sur le contenu des cases** (`T⁻¹ = S·R(−θ)`), sinon les lettres se retrouvent couchées ou en miroir. Le calque de contenu **doit** porter `pointer-events-none` : sans ça `elementFromPoint` tombe sur lui au lieu de la case et le tracé au doigt ne trouve plus rien.
+- **La bascule a lieu même en plein tracé, et le mot en cours n'est pas perdu** : la sélection est mémorisée par identité de case (`selectedCells`), pas par position à l'écran — le DOM ne bougeant pas, elle survit telle quelle et le joueur finit son mot après s'être réorienté. En revanche la saisie est **verrouillée pendant les 550 ms d'animation** (`spinning` ref) : sinon une case adjacente qui défile sous un doigt immobile s'ajouterait au mot toute seule.
+- Séquence de bascules tirée d'un PRNG **seedé sur la date** : tous les joueurs subissent les mêmes bascules aux mêmes moments.
+- Config par mode via `spin?: SpinConfig` sur `PyramidMode` (`everySecs`, `transforms`). Poser `spin` sur n'importe quel mode pyramide suffit à le faire basculer.
+
+### Couleur et emblème par mode
+Chaque mode a **sa** couleur d'accent et **son** emblème — c'est ce qui permet de reconnaître le défi du jour d'un coup d'œil sur l'accueil.
+- Accents des 5 modes permanents : Pyramiddle `#fbbf24` ambre · Triddle `#fb923c` orange · Ruddle `#60a5fa` bleu · Speedle `#34d399` émeraude · BiGriddle `#c084fc` violet · Spinddle `#fb7185` rose. ⚠ Vérifier la distance à l'existant avant d'en choisir une (Spinddle était initialement en `#a78bfa`, trop proche du violet BiGriddle). ⚠ Ambre Pyramiddle et orange Triddle restent voisins — à retravailler si un 7e mode arrive.
+- `emblem: EmblemId` est **obligatoire** sur `DailyModeBase` : un nouveau mode ne compile pas sans le sien. Rendu par [`ModeEmblem.tsx`](src/components/ModeEmblem.tsx) à partir d'icônes `lucide-react` (déjà une dépendance, traits homogènes). Ajouter un mode = 1 valeur dans `EmblemId` + 1 entrée dans `ICONS`.
 
 ### Classement Semaine / Mois
 - Points daily = 3/2/1 pour top1/2/3 par (date, mode).

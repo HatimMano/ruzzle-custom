@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Cell, Grid as GridType } from '../lib/gridGenerator'
+import type { SpinConfig } from '../lib/dailyModes'
+import { mulberry32, seedFromString } from '../lib/prng'
 
 type FeedbackType = 'valid' | 'duplicate' | 'invalid' | null
 
@@ -9,6 +11,21 @@ interface GridProps {
   disabled?: boolean
   discoveryPath?: Cell[]
   minLetters?: number
+  // Spinddle : oriente le plateau périodiquement. Purement visuel — le DOM, les
+  // data-row/data-col et donc toute la logique de sélection restent inchangés.
+  spin?: SpinConfig
+  spinSeed?: string
+}
+
+interface Orientation { rot: number; flip: boolean }
+const SPIN_MS = 550
+
+// Tire une orientation différente de l'actuelle parmi les 8 symétries du carré.
+function nextOrientation(cur: Orientation, transforms: SpinConfig['transforms'], rand: () => number): Orientation {
+  const opts: Orientation[] = []
+  if (transforms !== 'mirrors') for (const d of [90, 180, 270]) opts.push({ rot: (cur.rot + d) % 360, flip: cur.flip })
+  if (transforms !== 'rotations') for (const d of [0, 90, 180, 270]) opts.push({ rot: (cur.rot + d) % 360, flip: !cur.flip })
+  return opts[Math.floor(rand() * opts.length)]
 }
 
 const FEEDBACK_COLORS: Record<NonNullable<FeedbackType>, string> = {
@@ -31,7 +48,7 @@ const SIZE_LAYOUT: Record<number, { cell: number; gap: number; font: number }> =
 }
 const DEFAULT_LAYOUT = { cell: 78, gap: 12, font: 24 }
 
-export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minLetters = 5 }: GridProps) {
+export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minLetters = 5, spin, spinSeed }: GridProps) {
   const size = grid.length
   const { cell: cellPx, gap: gapPx, font: fontPx } = SIZE_LAYOUT[size] ?? DEFAULT_LAYOUT
 
@@ -40,6 +57,52 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
   const [feedbackCells, setFeedbackCells] = useState<Set<string>>(new Set())
   const isDragging = useRef(false)
   const feedbackTimer = useRef<number>(0)
+
+  // ─── Spinddle ───────────────────────────────────────────────────────────────
+  // Séquence tirée d'un PRNG seedé sur la date : tous les joueurs subissent les
+  // mêmes bascules aux mêmes moments, comme ils ont la même grille.
+  const [orient, setOrient] = useState<Orientation>({ rot: 0, flip: false })
+  const spinRand = useRef<(() => number) | null>(null)
+  const getSpinRand = useCallback(() => {
+    if (spinRand.current == null) spinRand.current = mulberry32(seedFromString(`spin:${spinSeed ?? ''}`))
+    return spinRand.current
+  }, [spinSeed])
+
+  // Le plateau bascule MÊME en plein tracé, et le mot en cours n'est pas perdu :
+  // la sélection est mémorisée par identité de case (`selectedCells`), pas par
+  // position à l'écran — le DOM ne bougeant pas, elle survit telle quelle et on
+  // peut finir son mot après s'être réorienté.
+  const spinning = useRef(false)
+  const spinningTimer = useRef<number>(0)
+
+  const applySpin = useCallback(() => {
+    if (!spin) return
+    const rand = getSpinRand()
+    setOrient(prev => nextOrientation(prev, spin.transforms, rand))
+    // Pendant l'animation, les cases défilent sous le doigt immobile : sans ce
+    // verrou, une case adjacente qui passe dessous s'ajouterait au mot toute seule.
+    spinning.current = true
+    clearTimeout(spinningTimer.current)
+    spinningTimer.current = window.setTimeout(() => { spinning.current = false }, SPIN_MS)
+  }, [spin, getSpinRand])
+
+  useEffect(() => {
+    if (!spin || disabled) return
+    const id = window.setInterval(applySpin, spin.everySecs * 1000)
+    return () => clearInterval(id)
+  }, [spin, disabled, applySpin])
+
+  useEffect(() => () => clearTimeout(spinningTimer.current), [])
+
+  const spinStyle = spin
+    ? { transform: `rotate(${orient.rot}deg) scaleX(${orient.flip ? -1 : 1})`, transition: `transform ${SPIN_MS}ms cubic-bezier(.6,.05,.25,1)` }
+    : undefined
+  // Contre-transform sur le contenu : sans elle les lettres se retrouvent couchées
+  // ou en miroir, et le mode devient illisible pour une raison qui n'a rien à voir
+  // avec sa règle. T = R(θ)·S ⟹ T⁻¹ = S·R(−θ).
+  const contentStyle = spin
+    ? { transform: `scaleX(${orient.flip ? -1 : 1}) rotate(${-orient.rot}deg)`, transition: `transform ${SPIN_MS}ms cubic-bezier(.6,.05,.25,1)` }
+    : undefined
 
   const cellKey = (c: Cell) => `${c.row},${c.col}`
 
@@ -88,6 +151,7 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
 
   const handleCellEnter = (cell: Cell) => {
     if (!isDragging.current || disabled) return
+    if (spinning.current) return
     setSelectedCells(prev => {
       // Retour arrière : si la cellule est l'avant-dernière, on retire la dernière
       if (prev.length >= 2 && cellKey(prev[prev.length - 2]) === cellKey(cell)) {
@@ -155,6 +219,7 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
 
   const handleTouchMove = (e: React.TouchEvent) => {
     e.preventDefault()
+    if (spinning.current) return
     const touch = e.touches[0]
     const cell = getCellFromTouch(touch)
     if (!cell) return
@@ -192,6 +257,8 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
         style={{
           gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
           gap: `${gapPx}px`,
+          transformOrigin: 'center',
+          ...spinStyle,
         }}
         onTouchMove={handleTouchMove}
       >
@@ -234,17 +301,25 @@ export default function Grid({ grid, onWordSubmit, disabled, discoveryPath, minL
                   }
                 `}
               >
-                {cell.letter.toUpperCase()}
-                {inDiscovery && discoveryIdx && (
-                  <span className="absolute top-0.5 right-1.5 text-[10px] text-violet-200 font-normal">
-                    {discoveryIdx}
-                  </span>
-                )}
-                {selected && !inFeedback && !inDiscovery && (
-                  <span className="absolute top-0.5 right-1.5 text-[10px] text-blue-300 font-normal">
-                    {selectedIdx + 1}
-                  </span>
-                )}
+                {/* pointer-events-none impératif : elementFromPoint doit continuer à
+                    tomber sur la case (qui porte data-row/data-col), pas sur ce calque,
+                    sinon le tracé au doigt ne trouve plus aucune cellule. */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  style={{ transformOrigin: 'center', ...contentStyle }}
+                >
+                  {cell.letter.toUpperCase()}
+                  {inDiscovery && discoveryIdx && (
+                    <span className="absolute top-0.5 right-1.5 text-[10px] text-violet-200 font-normal">
+                      {discoveryIdx}
+                    </span>
+                  )}
+                  {selected && !inFeedback && !inDiscovery && (
+                    <span className="absolute top-0.5 right-1.5 text-[10px] text-blue-300 font-normal">
+                      {selectedIdx + 1}
+                    </span>
+                  )}
+                </div>
               </div>
             )
           })

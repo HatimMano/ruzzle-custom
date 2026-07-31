@@ -11,6 +11,7 @@ import {
   type DailyMode,
 } from "../lib/dailyModes";
 import { speedleSecsBonus } from "../lib/speedleScoring";
+import ModeEmblem from "./ModeEmblem";
 
 const SPEEDLE_LENGTHS = [3, 4, 5, 6, 7, 8] as const;
 import HistoryDrawer from "./HistoryDrawer";
@@ -347,12 +348,21 @@ export default function HomeScreen({
               ))}
               {birthdayNumber && <ConfettiCanvas count={18} />}
               <div style={{ padding: "1.25rem 1.25rem 1rem", position: "relative" }}>
-                <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.2rem" }}>
-                  {todayMode.name.toUpperCase()}
-                </p>
-                <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft, marginBottom: "0.5rem" }}>
-                  {todayMode.subtitle}
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+                  <ModeEmblem
+                    emblem={todayMode.emblem}
+                    color={accent}
+                    animate={todayMode.emblem === "spin"}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: "1.6rem", fontWeight: 900, letterSpacing: "0.04em", color: "white", marginBottom: "0.1rem" }}>
+                      {todayMode.name.toUpperCase()}
+                    </p>
+                    <p style={{ fontSize: "0.75rem", fontWeight: 600, color: accentSoft }}>
+                      {todayMode.subtitle}
+                    </p>
+                  </div>
+                </div>
                 {/* Record du jour — label affiché de suite, valeurs en shimmer pendant le fetch */}
                 <div style={{
                   height: "1.15rem", marginBottom: "0.9rem",

@@ -70,6 +70,15 @@ body {
   100% { background-position: -200% 0; }
 }
 
+/* Emblème Spinddle : tourne en continu sur l'accueil, comme le plateau en jeu. */
+@keyframes emblemSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="emblemSpin"] { animation: none !important; }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

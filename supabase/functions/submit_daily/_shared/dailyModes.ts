@@ -574,6 +574,7 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [HATIM_BIRTHDAY_DATE]: hatimBirthdayMode,
   [AY_BIRTHDAY_DATE]: ayBirthdayMode,
   '2026-05-17': marathonMode,  // Premier Triddle (override BiGriddle dominical)
+  '2026-08-09': spinddleMode,  // Spinddle à la place de Speedle (rotation reprend ensuite)
 }
 
 function isSunday(date: string): boolean {

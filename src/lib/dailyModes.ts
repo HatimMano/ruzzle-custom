@@ -955,6 +955,9 @@ const SPECIAL_DATES: Record<string, DailyMode> = {
   [AY_BIRTHDAY_DATE]: ayBirthdayMode,
   // Premier test grandeur nature du Triddle (dimanche 17/05/2026, override BiGriddle)
   '2026-05-17': triddleMode,
+  // Spinddle avancé sur ce dimanche (à la place de Speedle). Override ponctuel :
+  // la rotation reprend son cours normal ensuite (16/08 BiGriddle, 23/08 Spinddle).
+  '2026-08-09': spinddleMode,
 }
 
 function utcDay(date: string): number {
